@@ -1,6 +1,9 @@
 {
   "phases": {
     "setup": {
+      "nixPkgs": [
+        "nodejs_20"
+      ],
       "aptPkgs": [
         "chromium",
         "fonts-liberation",
