@@ -213,13 +213,19 @@ async function allocateFixtures(weekStartDate) {
           continue;
         }
 
-        // Helper: check if a fixture's age group fits a pitch's max_age_group
+        // Helper: check if a fixture's age group fits a pitch's age restrictions
         const fitsPitch = (fixture, pitch) => {
-          if (!pitch.max_age_group) return true; // no restriction
           const fixtureAge = ageGroupNumber(fixture.age_group);
-          const maxAge = ageGroupNumber(pitch.max_age_group);
-          if (!fixtureAge || !maxAge) return true; // can't compare, allow
-          return fixtureAge <= maxAge;
+          if (!fixtureAge) return true; // can't determine age, allow
+          if (pitch.max_age_group) {
+            const maxAge = ageGroupNumber(pitch.max_age_group);
+            if (maxAge && fixtureAge > maxAge) return false;
+          }
+          if (pitch.min_age_group) {
+            const minAge = ageGroupNumber(pitch.min_age_group);
+            if (minAge && fixtureAge < minAge) return false;
+          }
+          return true;
         };
 
         // Split fixtures: those that exceed restricted pitches go first (to unrestricted only)

@@ -41,8 +41,9 @@ app.post('/api/setup', async (req, res) => {
     await client.query(`CREATE TABLE IF NOT EXISTS allocation_history (id SERIAL PRIMARY KEY, team_name VARCHAR(150), pitch_id INTEGER REFERENCES pitches(id), kick_off TIME, match_date DATE, created_at TIMESTAMP DEFAULT NOW())`);
 
     // --- MIGRATE additions ---
-    // Add max_age_group to pitches (e.g. Shropham 11v11 is U14 max)
+    // Age restrictions: Shropham 11v11 is U14 max, Morley 11v11 is U15 min
     await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
+    await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS min_age_group VARCHAR(10)`);
 
     // --- SEED ---
     const morley = await client.query(`INSERT INTO venues (name) VALUES ('Morley') ON CONFLICT DO NOTHING RETURNING id`);
@@ -77,10 +78,15 @@ app.post('/api/setup', async (req, res) => {
       }
     }
 
-    // Shropham 11v11 is undersized — only suitable for U14 and below
+    // Shropham 11v11 is undersized — U13/U14 only
     await client.query(
       `UPDATE pitches SET max_age_group = 'U14' WHERE venue_id = $1 AND format = '11v11'`,
       [shrophamId]
+    );
+    // Morley 11v11 is full size — U15+ only (U13/U14 must go to Shropham)
+    await client.query(
+      `UPDATE pitches SET min_age_group = 'U15' WHERE venue_id = $1 AND format = '11v11'`,
+      [morleyId]
     );
 
     await client.query('COMMIT');
@@ -93,17 +99,25 @@ app.post('/api/setup', async (req, res) => {
   }
 });
 
-// Auto-migrate: ensure max_age_group column exists and Shropham restriction is set
+// Auto-migrate: ensure age restriction columns exist and are set
 (async () => {
   try {
     const pool = require('./db/pool');
     await pool.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
+    await pool.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS min_age_group VARCHAR(10)`);
+    // Shropham 11v11: U14 max (undersized pitch)
     await pool.query(
       `UPDATE pitches SET max_age_group = 'U14'
        WHERE venue_id = (SELECT id FROM venues WHERE name = 'Shropham' LIMIT 1)
        AND format = '11v11' AND max_age_group IS NULL`
     );
-    console.log('Auto-migration: pitches.max_age_group ready');
+    // Morley 11v11: U15 min (U13/U14 must go to Shropham)
+    await pool.query(
+      `UPDATE pitches SET min_age_group = 'U15'
+       WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
+       AND format = '11v11' AND min_age_group IS NULL`
+    );
+    console.log('Auto-migration: pitch age restrictions ready');
   } catch (err) {
     // Tables may not exist yet (first run before /api/setup) — that's OK
     console.log('Auto-migration skipped (tables may not exist yet):', err.message);
