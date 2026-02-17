@@ -41,10 +41,11 @@ const AGE_TO_FORMAT = {
   'U17': '11v11', 'U18': '11v11'
 };
 
-// Girls play 9v9 at U13 and U14 (NWGFL rules) — 11v11 from U15
+// Girls play formats one year later (NWGFL rules):
+// U9 stays 5v5, U11 stays 7v7, U13/U14 stay 9v9, 11v11 from U15
 const GIRLS_AGE_TO_FORMAT = {
   ...AGE_TO_FORMAT,
-  'U13': '9v9', 'U14': '9v9'
+  'U9': '5v5', 'U11': '7v7', 'U13': '9v9', 'U14': '9v9'
 };
 
 // ---- Helpers ----

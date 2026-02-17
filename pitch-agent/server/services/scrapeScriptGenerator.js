@@ -35,8 +35,8 @@ const AGE_TO_FORMAT = {
   U11:'9v9',U12:'9v9',U13:'11v11',U14:'11v11',U15:'11v11',
   U16:'11v11',U17:'11v11',U18:'11v11'
 };
-// Girls play 9v9 at U13/U14 (NWGFL rules)
-const GIRLS_AGE_TO_FORMAT = {...AGE_TO_FORMAT,U13:'9v9',U14:'9v9'};
+// Girls formats one year later (NWGFL): U9 5v5, U11 7v7, U13/U14 9v9
+const GIRLS_AGE_TO_FORMAT = {...AGE_TO_FORMAT,U9:'5v5',U11:'7v7',U13:'9v9',U14:'9v9'};
 
 function extractAgeGroup(t){const m=t.match(/U(\\d+)/i);return m?'U'+m[1]:null;}
 function getFormat(a,g){const m=g==='girls'?GIRLS_AGE_TO_FORMAT:AGE_TO_FORMAT;return m[a]||'11v11';}

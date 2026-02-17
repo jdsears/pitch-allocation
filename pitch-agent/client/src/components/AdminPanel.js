@@ -79,8 +79,8 @@ export default function AdminPanel() {
         const ageGroup = parts[4] || '';
         const gender = parts[5] || 'boys';
         const boysFormatMap = { U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
-        // Girls play 9v9 at U13 and U14 (NWGFL rules) — 11v11 from U15
-        const girlsFormatMap = { ...boysFormatMap, U13: '9v9', U14: '9v9' };
+        // Girls play formats one year later (NWGFL): U9 5v5, U11 7v7, U13/U14 9v9
+        const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
         const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
         return {
           match_date: parts[0],
