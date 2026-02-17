@@ -90,11 +90,20 @@ async function fetchRenderedHTML(url) {
 
     console.log(`Navigating to: ${url}`);
 
-    // Use 'domcontentloaded' instead of 'networkidle2' - FA Full-Time keeps
-    // background connections open (analytics etc.) that prevent networkidle2
-    // from ever resolving
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
-    console.log('DOM loaded, waiting for fixture content...');
+    // FA Full-Time does client-side redirects after initial load.
+    // Use 'load' event which waits for initial page + subresources,
+    // then wait for any subsequent navigation to settle.
+    await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+    console.log(`Page loaded. Current URL: ${page.url()}`);
+
+    // Wait for any client-side redirect to complete
+    try {
+      await page.waitForNavigation({ waitUntil: 'load', timeout: 15000 });
+      console.log(`Redirected to: ${page.url()}`);
+    } catch {
+      // No redirect happened within 15s - that's fine
+      console.log('No redirect detected, continuing...');
+    }
 
     // Now wait for the actual fixture table to appear (JS-rendered content)
     const selectors = ['.League-Results_Table', 'table.table', 'table'];
@@ -118,7 +127,7 @@ async function fetchRenderedHTML(url) {
     await new Promise(r => setTimeout(r, 5000));
 
     const html = await page.content();
-    console.log(`Captured HTML: ${html.length} bytes`);
+    console.log(`Captured HTML: ${html.length} bytes. Final URL: ${page.url()}`);
     return html;
   } finally {
     if (browser) await browser.close();
@@ -290,16 +299,39 @@ async function debugScrape(gender) {
     });
 
     let navigationError = null;
+    let finalUrl = url;
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+      finalUrl = page.url();
+      console.log(`Debug: page loaded. URL: ${finalUrl}`);
+
+      // Wait for any client-side redirect
+      try {
+        await page.waitForNavigation({ waitUntil: 'load', timeout: 15000 });
+        finalUrl = page.url();
+        console.log(`Debug: redirected to ${finalUrl}`);
+      } catch {
+        console.log('Debug: no redirect detected');
+      }
+
       // Wait for JS content to render
-      await new Promise(r => setTimeout(r, 10000));
+      await new Promise(r => setTimeout(r, 5000));
     } catch (err) {
       navigationError = err.message;
       console.log(`Navigation issue: ${err.message}. Capturing whatever loaded.`);
     }
 
-    const html = await page.content();
+    // Use CDP to get HTML safely even if execution context was destroyed
+    let html;
+    try {
+      html = await page.content();
+    } catch {
+      // Fallback: get HTML via CDP protocol directly
+      const cdp = await page.target().createCDPSession();
+      const { root } = await cdp.send('DOM.getDocument');
+      const { outerHTML } = await cdp.send('DOM.getOuterHTML', { nodeId: root.nodeId });
+      html = outerHTML;
+    }
     const $ = cheerio.load(html);
 
     // Collect diagnostic info
@@ -345,6 +377,7 @@ async function debugScrape(gender) {
 
     return {
       url,
+      finalUrl,
       navigationError,
       htmlLength: html.length,
       title: $('title').text(),
