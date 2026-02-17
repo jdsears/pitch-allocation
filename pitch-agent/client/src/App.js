@@ -5,18 +5,49 @@ import AdminPanel from './components/AdminPanel';
 import RefClaimPage from './pages/RefClaimPage';
 import RequestForm from './components/RequestForm';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, fontFamily: 'monospace', color: '#ff4444', background: '#1a1a2e', minHeight: '100vh' }}>
+          <h2>Something went wrong</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, marginTop: 12 }}>
+            {this.state.error.message}
+          </pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, color: '#888', marginTop: 8 }}>
+            {this.state.error.stack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public ref claim page - shared via WhatsApp link */}
-        <Route path="/grid" element={<RefClaimPage />} />
-        <Route path="/request" element={<RequestForm />} />
-        
-        {/* Admin views for Guy */}
-        <Route path="/*" element={<Dashboard />} />
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          {/* Public ref claim page - shared via WhatsApp link */}
+          <Route path="/grid" element={<RefClaimPage />} />
+          <Route path="/request" element={<RequestForm />} />
+
+          {/* Admin views for Guy */}
+          <Route path="/*" element={<Dashboard />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

@@ -113,7 +113,7 @@ export default function RefClaimPage() {
         </div>
       )}
 
-      {grid && !loading && (
+      {grid?.grid && !loading && (
         <>
           {Object.keys(grid.grid).length === 0 ? (
             <div className="empty-state">
