@@ -106,6 +106,7 @@ async function scrapePage(url,label){
 }
 
 function parseFixtures(html,label){
+  const gender=label.toLowerCase()==='girls'?'girls':'boys';
   const $=cheerio.load(html);const fixtures=[];
 
   // Strategy 1: FA Full-Time table class
@@ -188,7 +189,7 @@ function parseFixtures(html,label){
           const homeTeam=m[1].trim();const awayTeam=m[2].trim();
           const ageGroup=extractAgeGroup(homeTeam)||extractAgeGroup(awayTeam);
           let venueName='';for(let k=cellTexts.length-1;k>=0;k--){const ct=cellTexts[k];if(ct.length>2&&ct!==t&&!ct.match(/^\\d{2}[\\/:]/)&&ct!==dateMatch[1]){venueName=ct;break;}}
-          fixtures.push({league_code:'',match_date:matchDate,kick_off:timeMatch?timeMatch[1]:null,home_team:homeTeam,away_team:awayTeam,venue_name:venueName,is_home_game:isMorleyHome(homeTeam),age_group:ageGroup,format:getFormat(ageGroup),match_type:'League / Cup'});
+          fixtures.push({league_code:'',match_date:matchDate,kick_off:timeMatch?timeMatch[1]:null,home_team:homeTeam,away_team:awayTeam,venue_name:venueName,is_home_game:isMorleyHome(homeTeam),age_group:ageGroup,format:getFormat(ageGroup,gender),gender:gender,match_type:'League / Cup'});
         }
       });
     }
@@ -203,7 +204,7 @@ function parseFixtures(html,label){
     const matchDate=yr+'-'+dp[1]+'-'+dp[0];
     const kickOff=timeMatch?timeMatch[1]:null;
     const ageGroup=extractAgeGroup(homeTeam)||extractAgeGroup(awayTeam);
-    fixtures.push({league_code:leagueCode,match_date:matchDate,kick_off:kickOff,home_team:homeTeam,away_team:awayTeam,venue_name:venueName,is_home_game:isMorleyHome(homeTeam),age_group:ageGroup,format:getFormat(ageGroup),match_type:'League / Cup'});
+    fixtures.push({league_code:leagueCode,match_date:matchDate,kick_off:kickOff,home_team:homeTeam,away_team:awayTeam,venue_name:venueName,is_home_game:isMorleyHome(homeTeam),age_group:ageGroup,format:getFormat(ageGroup,gender),gender:gender,match_type:'League / Cup'});
   });
   if(skippedPostponed>0)console.log('Skipped '+skippedPostponed+' postponed/cancelled fixtures');
   console.log('Parsed '+fixtures.length+' active fixtures from '+label);
@@ -217,9 +218,9 @@ async function main(){
   }
   console.log('=== Morley YFC Fixture Scraper ===');
   console.log('API: '+API_URL+'\\n');
-  const boys=(await scrapePage(BOYS_URL,'Boys')).map(f=>({...f,gender:'boys'}));
+  const boys=await scrapePage(BOYS_URL,'Boys');
   console.log('\\nBoys: '+boys.length+' fixtures');
-  const girls=(await scrapePage(GIRLS_URL,'Girls')).map(f=>({...f,gender:'girls',format:getFormat(f.age_group,'girls')}));
+  const girls=await scrapePage(GIRLS_URL,'Girls');
   console.log('\\nGirls: '+girls.length+' fixtures');
   const all=[...boys,...girls];
   console.log('\\n=== Total: '+all.length+' fixtures ===');

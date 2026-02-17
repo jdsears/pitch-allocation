@@ -6,6 +6,20 @@ const { scrapeAll, debugScrape } = require('../services/scraper');
 const { generateMacScript, generateWindowsScript } = require('../services/scrapeScriptGenerator');
 const { parseFixturesFromImage } = require('../services/ocrFixtureParser');
 
+// Canonical format mapping — single source of truth for server-side validation
+const AGE_TO_FORMAT = {
+  U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7',
+  U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
+  U16: '11v11', U17: '11v11', U18: '11v11'
+};
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9'
+};
+function computeFormat(ageGroup, gender) {
+  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
+  return map[ageGroup] || '11v11';
+}
+
 // Multer config: accept images up to 10MB in memory
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -101,6 +115,9 @@ router.post('/import', async (req, res) => {
 
     let saved = 0;
     for (const f of fixtures) {
+      // Always recompute format server-side from gender + age_group
+      const gender = f.gender || 'boys';
+      const format = computeFormat(f.age_group, gender);
       try {
         await pool.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
@@ -108,7 +125,7 @@ router.post('/import', async (req, res) => {
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
              gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format`,
-          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, f.gender || 'boys', f.age_group, f.format]
+          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, gender, f.age_group, format]
         );
         saved++;
       } catch (e) { /* skip dupes */ }
@@ -167,6 +184,9 @@ router.post('/import-image', upload.single('image'), async (req, res) => {
     // Save to database
     let saved = 0;
     for (const f of fixtures) {
+      // Always recompute format server-side from gender + age_group
+      const fGender = f.gender || gender;
+      const fFormat = computeFormat(f.age_group, fGender);
       try {
         await pool.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
@@ -174,7 +194,7 @@ router.post('/import-image', upload.single('image'), async (req, res) => {
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
              gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format`,
-          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, f.gender || 'boys', f.age_group, f.format]
+          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, fGender, f.age_group, fFormat]
         );
         saved++;
       } catch (e) { /* skip dupes */ }

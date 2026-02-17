@@ -1,6 +1,21 @@
 const pool = require('../db/pool');
 const { format, startOfWeek, addDays } = require('date-fns');
 
+// Canonical format mapping — recompute at allocation time so we never
+// trust stale/incorrect format values stored in the fixtures table.
+const AGE_TO_FORMAT = {
+  U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7',
+  U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
+  U16: '11v11', U17: '11v11', U18: '11v11'
+};
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9'
+};
+function computeFormat(ageGroup, gender) {
+  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
+  return map[ageGroup] || '11v11';
+}
+
 /**
  * Safely convert a date value (Date object or string) to a YYYY-MM-DD string.
  * Uses local-time getters to avoid timezone-related off-by-one issues
@@ -198,10 +213,18 @@ async function allocateFixtures(weekStartDate) {
       }
 
       // Group this day's fixtures by required format (pitch type)
+      // Always recompute format from gender + age_group to avoid stale DB values
       const byFormat = {};
       for (const f of dateFixtures) {
-        if (!byFormat[f.format]) byFormat[f.format] = [];
-        byFormat[f.format].push(f);
+        const reqFormat = computeFormat(f.age_group, f.gender);
+        if (reqFormat !== f.format) {
+          console.log(`Format correction: ${f.home_team} (${f.gender} ${f.age_group}): DB has ${f.format}, using ${reqFormat}`);
+          f.format = reqFormat;
+          // Also fix it in the DB while we're at it
+          client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+        }
+        if (!byFormat[reqFormat]) byFormat[reqFormat] = [];
+        byFormat[reqFormat].push(f);
       }
 
       // Allocate each format group to matching pitches

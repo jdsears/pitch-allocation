@@ -68,7 +68,7 @@ function buildFixtureUrl(seasonId, clubId) {
 }
 
 // ---- Scraping ----
-async function scrapeFixturePage(url, label) {
+async function scrapeFixturePage(url, label, gender = 'boys') {
   console.log(`\n--- Scraping ${label} ---`);
   console.log(`URL: ${url.substring(0, 80)}...`);
 
@@ -120,13 +120,13 @@ async function scrapeFixturePage(url, label) {
     const html = await page.content();
     console.log(`Captured ${html.length} bytes of HTML`);
 
-    return parseFixtures(html);
+    return parseFixtures(html, gender);
   } finally {
     await browser.close();
   }
 }
 
-function parseFixtures(html) {
+function parseFixtures(html, gender = 'boys') {
   const $ = cheerio.load(html);
   const fixtures = [];
 
@@ -214,7 +214,7 @@ function parseFixtures(html) {
 
     const kickOff = timeMatch ? timeMatch[1] : null;
     const ageGroup = extractAgeGroup(homeTeam) || extractAgeGroup(awayTeam);
-    const format = getFormat(ageGroup);
+    const format = getFormat(ageGroup, gender);
 
     fixtures.push({
       league_code: leagueCode,
@@ -226,6 +226,7 @@ function parseFixtures(html) {
       is_home_game: isMorleyHome(homeTeam),
       age_group: ageGroup,
       format,
+      gender,
       match_type: 'League / Cup'
     });
   });
@@ -266,17 +267,16 @@ async function main() {
 
   if (!girlsOnly) {
     const boysUrl = buildFixtureUrl(BOYS_SEASON_ID, BOYS_CLUB_ID);
-    const boys = await scrapeFixturePage(boysUrl, 'Boys');
-    const boysTagged = boys.map(f => ({ ...f, gender: 'boys' }));
+    const boys = await scrapeFixturePage(boysUrl, 'Boys', 'boys');
+    const boysTagged = boys;
     console.log(`Boys fixtures found: ${boysTagged.length}`);
     allFixtures.push(...boysTagged);
   }
 
   if (!boysOnly) {
     const girlsUrl = buildFixtureUrl(GIRLS_SEASON_ID, GIRLS_CLUB_ID);
-    const girls = await scrapeFixturePage(girlsUrl, 'Girls');
-    // Re-map format for girls (U13/U14 play 9v9 not 11v11)
-    const girlsTagged = girls.map(f => ({ ...f, gender: 'girls', format: getFormat(f.age_group, 'girls') }));
+    const girls = await scrapeFixturePage(girlsUrl, 'Girls', 'girls');
+    const girlsTagged = girls;
     console.log(`Girls fixtures found: ${girlsTagged.length}`);
     allFixtures.push(...girlsTagged);
   }

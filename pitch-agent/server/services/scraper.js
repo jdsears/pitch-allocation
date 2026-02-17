@@ -143,7 +143,7 @@ async function fetchRenderedHTML(url) {
 }
 
 // Parse fixtures from the rendered HTML
-function parseFixtures(html) {
+function parseFixtures(html, gender = 'boys') {
   const $ = cheerio.load(html);
   const fixtures = [];
 
@@ -238,7 +238,7 @@ function parseFixtures(html) {
 
     const kickOff = timeMatch ? timeMatch[1] : null;
     const ageGroup = extractAgeGroup(homeTeam) || extractAgeGroup(awayTeam);
-    const format = getFormat(ageGroup);
+    const format = getFormat(ageGroup, gender);
 
     fixtures.push({
       league_code: leagueCode,
@@ -250,6 +250,7 @@ function parseFixtures(html) {
       is_home_game: isMorleyHome(homeTeam),
       age_group: ageGroup,
       format: format,
+      gender: gender,
       match_type: 'League / Cup'
     });
   });
@@ -266,19 +267,18 @@ async function scrapeBoysFixtures() {
   const url = buildFixtureUrl(process.env.FA_BOYS_SEASON_ID, process.env.FA_BOYS_CLUB_ID);
   console.log('Scraping boys fixtures...');
   const html = await fetchRenderedHTML(url);
-  const fixtures = parseFixtures(html);
+  const fixtures = parseFixtures(html, 'boys');
   console.log(`Boys: found ${fixtures.length} fixtures`);
-  return fixtures.map(f => ({ ...f, gender: 'boys' }));
+  return fixtures;
 }
 
 async function scrapeGirlsFixtures() {
   const url = buildFixtureUrl(process.env.FA_GIRLS_SEASON_ID, process.env.FA_GIRLS_CLUB_ID);
   console.log('Scraping girls fixtures...');
   const html = await fetchRenderedHTML(url);
-  const fixtures = parseFixtures(html);
+  const fixtures = parseFixtures(html, 'girls');
   console.log(`Girls: found ${fixtures.length} fixtures`);
-  // Re-map format for girls (U13/U14 play 9v9 not 11v11)
-  return fixtures.map(f => ({ ...f, gender: 'girls', format: getFormat(f.age_group, 'girls') }));
+  return fixtures;
 }
 
 // Debug function: returns raw HTML and parsing diagnostics
@@ -379,7 +379,7 @@ async function debugScrape(gender) {
       }
     });
 
-    const fixtures = parseFixtures(html);
+    const fixtures = parseFixtures(html, gender);
 
     // Grab a snippet of the raw HTML body for inspection
     const bodyHtml = $('body').html() || '';
@@ -411,6 +411,8 @@ async function saveFixtures(fixtures) {
 
   try {
     for (const f of fixtures) {
+      // Always recompute format from gender + age_group as a safety net
+      const correctFormat = getFormat(f.age_group, f.gender);
       try {
         await client.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
@@ -422,7 +424,7 @@ async function saveFixtures(fixtures) {
              gender = EXCLUDED.gender,
              age_group = EXCLUDED.age_group,
              format = EXCLUDED.format`,
-          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type, f.is_home_game, f.gender, f.age_group, f.format]
+          [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type, f.is_home_game, f.gender, f.age_group, correctFormat]
         );
         saved++;
       } catch (err) {
