@@ -255,9 +255,10 @@ export default function AllocationGrid({ isAdmin = false }) {
               </thead>
               <tbody>
                 {fixtures.map((f, i) => {
-                  const dayName = f.match_date ? formatMatchDay(f.match_date) : 'TBC';
-                  const dayLabel = f.match_date
-                    ? `${dayName} ${format(new Date(f.match_date + 'T12:00:00'), 'd/M')}`
+                  const parsedFixDate = parseDate(f.match_date);
+                  const dayName = parsedFixDate ? formatMatchDay(f.match_date) : 'TBC';
+                  const dayLabel = parsedFixDate
+                    ? `${dayName} ${format(parsedFixDate, 'd/M')}`
                     : 'TBC';
                   return (
                     <tr key={f.id || i}>
