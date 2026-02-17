@@ -77,15 +77,31 @@ async function fetchRenderedHTML(url) {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-    console.log(`Navigating to: ${url}`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    // Block unnecessary resources to speed up loading
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const type = req.resourceType();
+      if (['image', 'font', 'media'].includes(type)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
 
-    // Try multiple selectors for the fixture table
-    const selectors = ['.League-Results_Table', '.fixtures-table', 'table.table', 'table'];
+    console.log(`Navigating to: ${url}`);
+
+    // Use 'domcontentloaded' instead of 'networkidle2' - FA Full-Time keeps
+    // background connections open (analytics etc.) that prevent networkidle2
+    // from ever resolving
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    console.log('DOM loaded, waiting for fixture content...');
+
+    // Now wait for the actual fixture table to appear (JS-rendered content)
+    const selectors = ['.League-Results_Table', 'table.table', 'table'];
     let found = false;
     for (const sel of selectors) {
       try {
-        await page.waitForSelector(sel, { timeout: 15000 });
+        await page.waitForSelector(sel, { timeout: 30000 });
         console.log(`Found table with selector: ${sel}`);
         found = true;
         break;
@@ -95,13 +111,14 @@ async function fetchRenderedHTML(url) {
     }
 
     if (!found) {
-      console.warn('No fixture table selector matched. Proceeding with full page HTML.');
+      console.warn('No fixture table selector matched. Capturing page anyway for diagnostics.');
     }
 
-    // Small extra wait for any late-loading content
-    await new Promise(r => setTimeout(r, 2000));
+    // Extra wait for JS to populate the table rows
+    await new Promise(r => setTimeout(r, 5000));
 
     const html = await page.content();
+    console.log(`Captured HTML: ${html.length} bytes`);
     return html;
   } finally {
     if (browser) await browser.close();
@@ -247,47 +264,101 @@ async function scrapeGirlsFixtures() {
 }
 
 // Debug function: returns raw HTML and parsing diagnostics
+// Captures as much info as possible even if the page partially loads
 async function debugScrape(gender) {
   const url = gender === 'girls'
     ? buildFixtureUrl(process.env.FA_GIRLS_SEASON_ID, process.env.FA_GIRLS_CLUB_ID)
     : buildFixtureUrl(process.env.FA_BOYS_SEASON_ID, process.env.FA_BOYS_CLUB_ID);
 
-  const html = await fetchRenderedHTML(url);
-  const $ = cheerio.load(html);
+  let browser;
+  try {
+    browser = await launchBrowser();
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-  // Collect diagnostic info
-  const tables = [];
-  $('table').each((i, table) => {
-    const classes = $(table).attr('class') || '(no class)';
-    const rowCount = $(table).find('tr').length;
-    tables.push({ index: i, classes, rowCount });
-  });
+    // Block images/fonts to speed things up
+    await page.setRequestInterception(true);
+    const requestLog = [];
+    page.on('request', (req) => {
+      const type = req.resourceType();
+      requestLog.push({ url: req.url().substring(0, 100), type });
+      if (['image', 'font', 'media'].includes(type)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
 
-  // Sample first 5 rows with VS
-  const sampleRows = [];
-  $('tr').each((i, row) => {
-    if (sampleRows.length >= 5) return;
-    const text = $(row).text().trim();
-    if (text.includes('VS') || text.includes(' v ')) {
+    let navigationError = null;
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      // Wait for JS content to render
+      await new Promise(r => setTimeout(r, 10000));
+    } catch (err) {
+      navigationError = err.message;
+      console.log(`Navigation issue: ${err.message}. Capturing whatever loaded.`);
+    }
+
+    const html = await page.content();
+    const $ = cheerio.load(html);
+
+    // Collect diagnostic info
+    const tables = [];
+    $('table').each((i, table) => {
+      const classes = $(table).attr('class') || '(no class)';
+      const id = $(table).attr('id') || '(no id)';
+      const rowCount = $(table).find('tr').length;
+      tables.push({ index: i, classes, id, rowCount });
+    });
+
+    // Sample first 5 rows with VS
+    const sampleRows = [];
+    $('tr').each((i, row) => {
+      if (sampleRows.length >= 5) return;
+      const text = $(row).text().trim();
+      if (text.includes('VS') || text.includes(' v ')) {
+        const cells = [];
+        $(row).find('td').each((j, cell) => {
+          cells.push($(cell).text().trim());
+        });
+        sampleRows.push({ rowIndex: i, cells, fullText: text.substring(0, 300) });
+      }
+    });
+
+    // Also sample first 5 table rows (even without VS) for diagnostics
+    const allSampleRows = [];
+    $('tr').each((i, row) => {
+      if (allSampleRows.length >= 5) return;
       const cells = [];
-      $(row).find('td').each((j, cell) => {
+      $(row).find('td, th').each((j, cell) => {
         cells.push($(cell).text().trim());
       });
-      sampleRows.push({ rowIndex: i, cells, fullText: text.substring(0, 300) });
-    }
-  });
+      if (cells.length > 0) {
+        allSampleRows.push({ rowIndex: i, cells });
+      }
+    });
 
-  const fixtures = parseFixtures(html);
+    const fixtures = parseFixtures(html);
 
-  return {
-    url,
-    htmlLength: html.length,
-    title: $('title').text(),
-    tables,
-    sampleRows,
-    parsedFixtures: fixtures.length,
-    firstFixtures: fixtures.slice(0, 3),
-  };
+    // Grab a snippet of the raw HTML body for inspection
+    const bodyHtml = $('body').html() || '';
+
+    return {
+      url,
+      navigationError,
+      htmlLength: html.length,
+      title: $('title').text(),
+      bodySnippet: bodyHtml.substring(0, 2000),
+      tables,
+      sampleRows,
+      allSampleRows,
+      networkRequests: requestLog.length,
+      parsedFixtures: fixtures.length,
+      firstFixtures: fixtures.slice(0, 3),
+    };
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
 // Save fixtures to database
