@@ -152,11 +152,21 @@ function parseFixtures(html,label){
     console.log('  Row '+i+' ('+cells.length+' cells): '+JSON.stringify(texts).substring(0,300));
   });
 
+  let skippedPostponed=0;
   rows.each((i,row)=>{
     if($(row).find('th').length>0)return;
     const cells=$(row).find('td');if(cells.length<3)return;
     const cellTexts=[];cells.each((j,c)=>{cellTexts.push($(c).text().trim());});
     const rowText=cellTexts.join(' ');
+
+    // Skip postponed/cancelled fixtures (Status column is typically last cell)
+    const lastCell=cellTexts[cellTexts.length-1].toLowerCase();
+    const secondLast=cellTexts.length>1?cellTexts[cellTexts.length-2].toLowerCase():'';
+    if(lastCell.includes('postponed')||lastCell.includes('cancelled')||lastCell.includes('canceled')||lastCell.includes('void')||
+       secondLast.includes('postponed')||secondLast.includes('cancelled')||secondLast.includes('canceled')||secondLast.includes('void')){
+      skippedPostponed++;return;
+    }
+
     const dateMatch=rowText.match(/(\\d{2}\\/\\d{2}\\/\\d{2,4})/);if(!dateMatch)return;
     const timeMatch=rowText.match(/(\\d{2}:\\d{2})/);
 
@@ -171,7 +181,6 @@ function parseFixtures(html,label){
       cellTexts.forEach((t,idx)=>{
         const m=t.match(/(.{4,})\\s+(?:VS|vs|v|V)\\s+(.{4,})/);
         if(m){
-          // Found VS embedded in cell - extract teams directly
           const dp=dateMatch[1].split('/');let yr=dp[2];if(yr&&yr.length===2)yr='20'+yr;
           const matchDate=yr+'-'+dp[1]+'-'+dp[0];
           const homeTeam=m[1].trim();const awayTeam=m[2].trim();
@@ -194,7 +203,8 @@ function parseFixtures(html,label){
     const ageGroup=extractAgeGroup(homeTeam)||extractAgeGroup(awayTeam);
     fixtures.push({league_code:leagueCode,match_date:matchDate,kick_off:kickOff,home_team:homeTeam,away_team:awayTeam,venue_name:venueName,is_home_game:isMorleyHome(homeTeam),age_group:ageGroup,format:getFormat(ageGroup),match_type:'League / Cup'});
   });
-  console.log('Parsed '+fixtures.length+' fixtures from '+label);
+  if(skippedPostponed>0)console.log('Skipped '+skippedPostponed+' postponed/cancelled fixtures');
+  console.log('Parsed '+fixtures.length+' active fixtures from '+label);
   return fixtures;
 }
 
@@ -222,11 +232,11 @@ async function main(){
     const h=f.is_home_game?'(H)':'(A)';
     console.log('  '+f.match_date+' '+(f.kick_off||'??:??')+'  '+f.home_team+' vs '+f.away_team+'  '+h+'  '+(f.age_group||'?')+'  '+f.gender);
   });
-  console.log('\\nPushing to API...');
-  const res=await fetch(API_URL+'/api/fixtures/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixtures:all})});
+  console.log('\\nPushing to API (sync mode - will remove postponed fixtures)...');
+  const res=await fetch(API_URL+'/api/fixtures/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fixtures:all,sync:true})});
   if(!res.ok){const t=await res.text();throw new Error('API error '+res.status+': '+t);}
   const result=await res.json();
-  console.log('Saved: '+JSON.stringify(result));
+  console.log('Saved: '+result.saved+' fixtures'+(result.removed?' (removed '+result.removed+' stale/postponed)':''));
   console.log('\\nDone! Fixtures have been imported successfully.');
 }
 

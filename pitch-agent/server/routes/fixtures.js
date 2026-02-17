@@ -63,11 +63,40 @@ router.post('/scrape', async (req, res) => {
 });
 
 // POST /api/fixtures/import - manually import fixtures (for when scraper can't reach FA)
+// When sync=true, removes fixtures that are no longer on FA Full-Time (e.g. postponed)
 router.post('/import', async (req, res) => {
   try {
-    const { fixtures } = req.body;
+    const { fixtures, sync } = req.body;
     if (!fixtures || !Array.isArray(fixtures)) {
       return res.status(400).json({ error: 'fixtures array required' });
+    }
+
+    // When sync=true, delete fixtures for imported genders that aren't in the new set.
+    // This removes postponed fixtures that no longer appear on FA Full-Time.
+    let removed = 0;
+    if (sync && fixtures.length > 0) {
+      const genders = [...new Set(fixtures.map(f => f.gender || 'boys'))];
+      for (const gender of genders) {
+        const genderFixtures = fixtures.filter(f => (f.gender || 'boys') === gender);
+        // Build a set of (match_date, home_team, away_team) tuples to keep
+        const keepTuples = genderFixtures.map(f => [f.match_date, f.home_team, f.away_team]);
+        // Delete fixtures for this gender that aren't in the incoming set
+        // Use a CTE with VALUES list for the comparison
+        if (keepTuples.length > 0) {
+          const placeholders = keepTuples.map((_, i) =>
+            `($${i * 3 + 2}::date, $${i * 3 + 3}::varchar, $${i * 3 + 4}::varchar)`
+          ).join(', ');
+          const params = [gender];
+          keepTuples.forEach(t => params.push(t[0], t[1], t[2]));
+          const deleteResult = await pool.query(
+            `DELETE FROM fixtures
+             WHERE gender = $1
+             AND (match_date, home_team, away_team) NOT IN (${placeholders})`,
+            params
+          );
+          removed += deleteResult.rowCount;
+        }
+      }
     }
 
     let saved = 0;
@@ -83,7 +112,7 @@ router.post('/import', async (req, res) => {
         saved++;
       } catch (e) { /* skip dupes */ }
     }
-    res.json({ success: true, saved });
+    res.json({ success: true, saved, removed });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
