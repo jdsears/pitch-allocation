@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import AllocationGrid from './components/AllocationGrid';
+import OverviewGrid from './components/OverviewGrid';
 import AdminPanel from './components/AdminPanel';
 import RefClaimPage from './pages/RefClaimPage';
 import RequestForm from './components/RequestForm';
@@ -52,7 +53,7 @@ function App() {
 }
 
 function Dashboard() {
-  const [activeTab, setActiveTab] = useState('grid');
+  const [activeTab, setActiveTab] = useState('overview');
 
   return (
     <div className="app">
@@ -62,10 +63,16 @@ function Dashboard() {
         </h1>
         <nav className="nav">
           <button
+            className={activeTab === 'overview' ? 'active' : ''}
+            onClick={() => setActiveTab('overview')}
+          >
+            Overview
+          </button>
+          <button
             className={activeTab === 'grid' ? 'active' : ''}
             onClick={() => setActiveTab('grid')}
           >
-            Allocation Grid
+            Weekly
           </button>
           <button
             className={activeTab === 'admin' ? 'active' : ''}
@@ -76,6 +83,7 @@ function Dashboard() {
         </nav>
       </header>
 
+      {activeTab === 'overview' && <OverviewGrid />}
       {activeTab === 'grid' && <AllocationGrid isAdmin={true} />}
       {activeTab === 'admin' && <AdminPanel />}
     </div>

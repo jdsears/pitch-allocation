@@ -457,6 +457,11 @@ input:focus, select:focus {
   border-radius: 3px;
 }
 
+/* Overview week cards */
+.overview-week .card-header h2 {
+  font-size: 15px;
+}
+
 /* Print styles for generating hard copy */
 @media print {
   body { background: white; color: black; }

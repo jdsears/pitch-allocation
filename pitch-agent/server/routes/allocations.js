@@ -1,8 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
-const { allocateFixtures, getAllocationGrid, getWeekSummary } = require('../services/allocator');
+const { allocateFixtures, getAllocationGrid, getWeekSummary, getMultiWeekOverview } = require('../services/allocator');
 const { sendWeeklyAllocation, formatWeeklySummary } = require('../services/whatsapp');
+
+// GET /api/allocations/overview?weeks=4
+router.get('/overview', async (req, res) => {
+  try {
+    const weeks = parseInt(req.query.weeks) || 4;
+    const overview = await getMultiWeekOverview(req.query.week, weeks);
+    res.json(overview);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/allocations/grid?week=2026-03-16
 router.get('/grid', async (req, res) => {

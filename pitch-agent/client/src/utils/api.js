@@ -20,6 +20,7 @@ export const importFixtureImage = (file, gender) => {
 
 // Allocations
 export const getAllocationGrid = (week) => api.get('/allocations/grid', { params: { week } });
+export const getAllocationOverview = (week, weeks = 4) => api.get('/allocations/overview', { params: { week, weeks } });
 export const generateAllocations = (week) => api.post('/allocations/generate', { week });
 export const updateAllocation = (id, data) => api.put(`/allocations/${id}`, data);
 export const deleteAllocation = (id) => api.delete(`/allocations/${id}`);

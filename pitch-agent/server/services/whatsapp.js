@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { format } = require('date-fns');
-const { getWeekSummary } = require('./allocator');
+const { getWeekSummary, getAllocationGrid } = require('./allocator');
 
 /**
  * Safely parse a YYYY-MM-DD date string into a local Date object.
@@ -66,7 +66,7 @@ async function sendWhatsAppMessage(to, message) {
   }
 }
 
-function formatWeeklySummary(summary, gridUrl) {
+function formatWeeklySummary(summary, gridUrl, gridData) {
   const weekStart = safeFormat(summary.weekStart, 'do MMMM', summary.weekStart);
 
   let msg = `⚽ *Pitch Allocations*\n`;
@@ -80,8 +80,30 @@ function formatWeeklySummary(summary, gridUrl) {
     msg += `\n`;
   }
 
+  // Detailed match breakdown by venue
+  if (gridData?.grid) {
+    msg += `\n━━━━━━━━━━━━━━━\n`;
+    for (const [venue, pitches] of Object.entries(gridData.grid)) {
+      msg += `\n📍 *${venue}*\n`;
+      for (const [pitch, dates] of Object.entries(pitches)) {
+        for (const [date, matches] of Object.entries(dates)) {
+          const dayName = safeFormat(date, 'EEE do MMM', date);
+          msg += `\n*${pitch} — ${dayName}*\n`;
+          for (const match of matches) {
+            const ko = match.kick_off?.substring(0, 5) || '??:??';
+            const refIcon = match.referee ? '🟢' : '🔴';
+            const ref = match.referee || 'REF NEEDED';
+            msg += `⏱ ${ko} | ${match.home_team} v ${match.away_team}\n`;
+            msg += `     ${match.age_group} | ${refIcon} ${ref}\n`;
+          }
+        }
+      }
+    }
+    msg += `\n━━━━━━━━━━━━━━━\n`;
+  }
+
   if (summary.unrefereed.length > 0) {
-    msg += `\n🔴 *Refs needed:*\n`;
+    msg += `\n🔴 *Refs still needed:*\n`;
     for (const match of summary.unrefereed) {
       const date = safeFormat(match.match_date, 'EEE', '???');
       const ko = match.allocated_kick_off?.substring(0, 5);
@@ -128,8 +150,11 @@ function formatDetailedGrid(gridData) {
 }
 
 async function sendWeeklyAllocation(weekStartDate, gridUrl) {
-  const summary = await getWeekSummary(weekStartDate);
-  const summaryMsg = formatWeeklySummary(summary, gridUrl);
+  const [summary, gridData] = await Promise.all([
+    getWeekSummary(weekStartDate),
+    getAllocationGrid(weekStartDate),
+  ]);
+  const summaryMsg = formatWeeklySummary(summary, gridUrl, gridData);
   const result = await sendWhatsAppMessage(process.env.WHATSAPP_GROUP_ID, summaryMsg);
   return { ...result, message: summaryMsg };
 }
