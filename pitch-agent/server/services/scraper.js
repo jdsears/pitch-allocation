@@ -21,7 +21,7 @@ function findChromiumPath() {
   return null;
 }
 
-// Age group to pitch format mapping
+// Age group to pitch format mapping (boys)
 const AGE_TO_FORMAT = {
   'U6': '5v5', 'U7': '5v5', 'U8': '5v5',
   'U9': '7v7', 'U10': '7v7',
@@ -30,13 +30,20 @@ const AGE_TO_FORMAT = {
   'U17': '11v11', 'U18': '11v11'
 };
 
+// Girls play 9v9 at U13 and U14 (NWGFL rules) — 11v11 from U15
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT,
+  'U13': '9v9', 'U14': '9v9'
+};
+
 function extractAgeGroup(teamName) {
   const match = teamName.match(/U(\d+)/i);
   return match ? `U${match[1]}` : null;
 }
 
-function getFormat(ageGroup) {
-  return AGE_TO_FORMAT[ageGroup] || '11v11';
+function getFormat(ageGroup, gender) {
+  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
+  return map[ageGroup] || '11v11';
 }
 
 function isMorleyHome(homeTeam) {
@@ -269,7 +276,8 @@ async function scrapeGirlsFixtures() {
   const html = await fetchRenderedHTML(url);
   const fixtures = parseFixtures(html);
   console.log(`Girls: found ${fixtures.length} fixtures`);
-  return fixtures.map(f => ({ ...f, gender: 'girls' }));
+  // Re-map format for girls (U13/U14 play 9v9 not 11v11)
+  return fixtures.map(f => ({ ...f, gender: 'girls', format: getFormat(f.age_group, 'girls') }));
 }
 
 // Debug function: returns raw HTML and parsing diagnostics

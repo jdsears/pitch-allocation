@@ -15,6 +15,12 @@ const AGE_TO_FORMAT = {
   U17: '11v11', U18: '11v11'
 };
 
+// Girls play 9v9 at U13 and U14 (NWGFL rules) — 11v11 from U15
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT,
+  U13: '9v9', U14: '9v9'
+};
+
 function isMorleyHome(homeTeam) {
   return homeTeam.toLowerCase().includes('morley');
 }
@@ -106,7 +112,7 @@ If you cannot find any fixtures, return an empty array [].`
     venue_name: f.venue_name || '',
     is_home_game: isMorleyHome(f.home_team),
     age_group: f.age_group || null,
-    format: AGE_TO_FORMAT[f.age_group] || '11v11',
+    format: ((f.gender || gender) === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT)[f.age_group] || '11v11',
     gender: f.gender || gender,
     match_type: 'League / Cup',
   }));

@@ -35,9 +35,11 @@ const AGE_TO_FORMAT = {
   U11:'9v9',U12:'9v9',U13:'11v11',U14:'11v11',U15:'11v11',
   U16:'11v11',U17:'11v11',U18:'11v11'
 };
+// Girls play 9v9 at U13/U14 (NWGFL rules)
+const GIRLS_AGE_TO_FORMAT = {...AGE_TO_FORMAT,U13:'9v9',U14:'9v9'};
 
 function extractAgeGroup(t){const m=t.match(/U(\\d+)/i);return m?'U'+m[1]:null;}
-function getFormat(a){return AGE_TO_FORMAT[a]||'11v11';}
+function getFormat(a,g){const m=g==='girls'?GIRLS_AGE_TO_FORMAT:AGE_TO_FORMAT;return m[a]||'11v11';}
 function isMorleyHome(t){return t.toLowerCase().includes('morley');}
 
 async function scrapePage(url,label){
@@ -217,7 +219,7 @@ async function main(){
   console.log('API: '+API_URL+'\\n');
   const boys=(await scrapePage(BOYS_URL,'Boys')).map(f=>({...f,gender:'boys'}));
   console.log('\\nBoys: '+boys.length+' fixtures');
-  const girls=(await scrapePage(GIRLS_URL,'Girls')).map(f=>({...f,gender:'girls'}));
+  const girls=(await scrapePage(GIRLS_URL,'Girls')).map(f=>({...f,gender:'girls',format:getFormat(f.age_group,'girls')}));
   console.log('\\nGirls: '+girls.length+' fixtures');
   const all=[...boys,...girls];
   console.log('\\n=== Total: '+all.length+' fixtures ===');

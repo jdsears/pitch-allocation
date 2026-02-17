@@ -32,7 +32,7 @@ const BOYS_CLUB_ID = '926960945';
 const GIRLS_SEASON_ID = '199649392';
 const GIRLS_CLUB_ID = '468454775';
 
-// Age group to pitch format
+// Age group to pitch format (boys)
 const AGE_TO_FORMAT = {
   'U6': '5v5', 'U7': '5v5', 'U8': '5v5',
   'U9': '7v7', 'U10': '7v7',
@@ -41,14 +41,21 @@ const AGE_TO_FORMAT = {
   'U17': '11v11', 'U18': '11v11'
 };
 
+// Girls play 9v9 at U13 and U14 (NWGFL rules) — 11v11 from U15
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT,
+  'U13': '9v9', 'U14': '9v9'
+};
+
 // ---- Helpers ----
 function extractAgeGroup(teamName) {
   const match = teamName.match(/U(\d+)/i);
   return match ? `U${match[1]}` : null;
 }
 
-function getFormat(ageGroup) {
-  return AGE_TO_FORMAT[ageGroup] || '11v11';
+function getFormat(ageGroup, gender) {
+  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
+  return map[ageGroup] || '11v11';
 }
 
 function isMorleyHome(homeTeam) {
@@ -267,7 +274,8 @@ async function main() {
   if (!boysOnly) {
     const girlsUrl = buildFixtureUrl(GIRLS_SEASON_ID, GIRLS_CLUB_ID);
     const girls = await scrapeFixturePage(girlsUrl, 'Girls');
-    const girlsTagged = girls.map(f => ({ ...f, gender: 'girls' }));
+    // Re-map format for girls (U13/U14 play 9v9 not 11v11)
+    const girlsTagged = girls.map(f => ({ ...f, gender: 'girls', format: getFormat(f.age_group, 'girls') }));
     console.log(`Girls fixtures found: ${girlsTagged.length}`);
     allFixtures.push(...girlsTagged);
   }
