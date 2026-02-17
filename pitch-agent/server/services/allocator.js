@@ -2,6 +2,26 @@ const pool = require('../db/pool');
 const { format, startOfWeek, addDays } = require('date-fns');
 
 /**
+ * Safely convert a date value (Date object or string) to a YYYY-MM-DD string.
+ * Uses local-time getters to avoid timezone-related off-by-one issues
+ * that occur with format(new Date(...)) or toISOString().
+ * Returns null if the value is missing or invalid.
+ */
+function toDateString(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? match[0] : null;
+}
+
+/**
  * Get the last kick-off time a team was allocated (most recent match)
  */
 async function getLastKickOff(teamName, pitchId) {
@@ -130,7 +150,8 @@ async function allocateFixtures(weekStartDate) {
     // Group fixtures by date
     const fixturesByDate = {};
     for (const fixture of fixtures.rows) {
-      const date = format(new Date(fixture.match_date), 'yyyy-MM-dd');
+      const date = toDateString(fixture.match_date);
+      if (!date) continue; // skip fixtures with invalid/missing dates
       if (!fixturesByDate[date]) fixturesByDate[date] = [];
       fixturesByDate[date].push(fixture);
     }
@@ -265,7 +286,8 @@ async function getAllocationGrid(weekStartDate) {
   for (const row of result.rows) {
     const venue = row.venue_name;
     const pitch = row.pitch_name;
-    const date = format(new Date(row.match_date), 'yyyy-MM-dd');
+    const date = toDateString(row.match_date);
+    if (!date) continue; // skip rows with invalid/missing dates
 
     if (!grid[venue]) grid[venue] = {};
     if (!grid[venue][pitch]) grid[venue][pitch] = {};

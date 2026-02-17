@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getAllocationGrid, getReferees, claimMatch, unclaimMatch } from '../utils/api';
-import { cleanTeamName, formatMatchDay } from '../utils/helpers';
+import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function RefClaimPage() {
   const [searchParams] = useSearchParams();
   const weekParam = searchParams.get('week');
+  const validWeekParam = weekParam && parseDate(weekParam) ? weekParam : null;
   const [weekDate] = useState(
-    weekParam || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    validWeekParam || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   );
   const [grid, setGrid] = useState(null);
   const [referees, setReferees] = useState([]);
@@ -131,15 +132,17 @@ export default function RefClaimPage() {
                     
                     {Object.entries(dates).map(([date, allocations]) => {
                       const dayName = formatMatchDay(date);
+                      const parsed = parseDate(date);
+                      const dayLabel = parsed ? `${dayName} ${format(parsed, 'd MMM')}` : date;
                       return (
                         <div key={date}>
                           {/* Day header */}
-                          <div style={{ 
-                            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', 
-                            textTransform: 'uppercase', letterSpacing: 0.5, 
+                          <div style={{
+                            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+                            textTransform: 'uppercase', letterSpacing: 0.5,
                             padding: '8px 0 4px', marginTop: 4
                           }}>
-                            {dayName} {format(new Date(date + 'T12:00:00'), 'd MMM')}
+                            {dayLabel}
                           </div>
 
                           {allocations.map(a => (

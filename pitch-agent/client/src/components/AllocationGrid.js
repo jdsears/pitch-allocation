@@ -12,7 +12,7 @@ import {
   claimMatch,
   unclaimMatch,
 } from '../utils/api';
-import { cleanTeamName, formatMatchDay } from '../utils/helpers';
+import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function AllocationGrid({ isAdmin = false }) {
   const [weekDate, setWeekDate] = useState(
@@ -339,7 +339,8 @@ export default function AllocationGrid({ isAdmin = false }) {
                           <tbody>
                             {dateEntries.map(([date, allocations]) => {
                               const dayName = formatMatchDay(date);
-                              const dayLabel = `${dayName} ${format(new Date(date + 'T12:00:00'), 'd/M')}`;
+                              const parsed = parseDate(date);
+                              const dayLabel = parsed ? `${dayName} ${format(parsed, 'd/M')}` : date;
 
                               return allocations.map((a, idx) => (
                                 <tr key={a.allocation_id}>

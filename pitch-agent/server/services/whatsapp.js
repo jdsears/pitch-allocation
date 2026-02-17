@@ -2,6 +2,35 @@ const axios = require('axios');
 const { format } = require('date-fns');
 const { getWeekSummary } = require('./allocator');
 
+/**
+ * Safely parse a YYYY-MM-DD date string into a local Date object.
+ * Avoids timezone off-by-one by using explicit year/month/day constructor.
+ */
+function parseDate(dateStr) {
+  if (!dateStr) return null;
+  const str = typeof dateStr === 'string' ? dateStr : String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const [, y, m, d] = match.map(Number);
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Safely format a date value (Date object or YYYY-MM-DD string) with date-fns.
+ * Returns the fallback string if the value is invalid.
+ */
+function safeFormat(value, pattern, fallback = '') {
+  let date;
+  if (value instanceof Date) {
+    date = isNaN(value.getTime()) ? null : value;
+  } else {
+    date = parseDate(value);
+  }
+  if (!date) return fallback;
+  return format(date, pattern);
+}
+
 const WHATSAPP_API = 'https://graph.facebook.com/v18.0';
 
 async function sendWhatsAppMessage(to, message) {
@@ -38,7 +67,7 @@ async function sendWhatsAppMessage(to, message) {
 }
 
 function formatWeeklySummary(summary, gridUrl) {
-  const weekStart = format(new Date(summary.weekStart), 'do MMMM');
+  const weekStart = safeFormat(summary.weekStart, 'do MMMM', summary.weekStart);
 
   let msg = `⚽ *Pitch Allocations*\n`;
   msg += `📅 Week of ${weekStart}\n\n`;
@@ -54,7 +83,7 @@ function formatWeeklySummary(summary, gridUrl) {
   if (summary.unrefereed.length > 0) {
     msg += `\n🔴 *Refs needed:*\n`;
     for (const match of summary.unrefereed) {
-      const date = format(new Date(match.match_date), 'EEE');
+      const date = safeFormat(match.match_date, 'EEE', '???');
       const ko = match.allocated_kick_off?.substring(0, 5);
       msg += `• ${date} ${ko} - ${match.age_group} @ ${match.venue_name}\n`;
     }
@@ -69,7 +98,7 @@ function formatWeeklySummary(summary, gridUrl) {
 
 function formatDetailedGrid(gridData) {
   let msg = `⚽ *PITCH ALLOCATIONS*\n`;
-  msg += `📅 ${format(new Date(gridData.weekStart), 'do MMMM')} - ${format(new Date(gridData.weekEnd), 'do MMMM')}\n`;
+  msg += `📅 ${safeFormat(gridData.weekStart, 'do MMMM', gridData.weekStart)} - ${safeFormat(gridData.weekEnd, 'do MMMM', gridData.weekEnd)}\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const [venue, pitches] of Object.entries(gridData.grid)) {
@@ -77,7 +106,7 @@ function formatDetailedGrid(gridData) {
 
     for (const [pitch, dates] of Object.entries(pitches)) {
       for (const [date, matches] of Object.entries(dates)) {
-        const dayName = format(new Date(date), 'EEEE do');
+        const dayName = safeFormat(date, 'EEEE do', date);
         msg += `*${pitch} - ${dayName}*\n`;
 
         for (const match of matches) {
