@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
-const { scrapeAll } = require('../services/scraper');
+const { scrapeAll, debugScrape } = require('../services/scraper');
 
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
@@ -70,6 +70,17 @@ router.post('/import', async (req, res) => {
     res.json({ success: true, saved });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/fixtures/debug - debug scraping (shows raw HTML diagnostics)
+router.get('/debug', async (req, res) => {
+  try {
+    const gender = req.query.gender || 'boys';
+    const result = await debugScrape(gender);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
