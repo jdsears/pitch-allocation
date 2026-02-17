@@ -1,0 +1,29 @@
+{
+  "phases": {
+    "setup": {
+      "aptPkgs": [
+        "chromium",
+        "chromium-sandbox",
+        "fonts-liberation",
+        "libnss3",
+        "libatk-bridge2.0-0",
+        "libdrm2",
+        "libxkbcommon0",
+        "libgbm1",
+        "libasound2"
+      ]
+    },
+    "install": {
+      "cmds": [
+        "npm install",
+        "cd client && npm install"
+      ]
+    },
+    "build": {
+      "cmds": [
+        "cd client && npm run build"
+      ]
+    }
+  },
+  "start": "node server/index.js"
+}
