@@ -418,7 +418,10 @@ async function saveFixtures(fixtures) {
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off,
              venue_name = EXCLUDED.venue_name,
-             league_code = EXCLUDED.league_code`,
+             league_code = EXCLUDED.league_code,
+             gender = EXCLUDED.gender,
+             age_group = EXCLUDED.age_group,
+             format = EXCLUDED.format`,
           [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type, f.is_home_game, f.gender, f.age_group, f.format]
         );
         saved++;
