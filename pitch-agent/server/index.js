@@ -15,12 +15,6 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// API Routes
-app.use('/api/fixtures', fixtureRoutes);
-app.use('/api/allocations', allocationRoutes);
-app.use('/api/referees', refereeRoutes);
-app.use('/api', generalRoutes);
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -88,6 +82,12 @@ app.post('/api/setup', async (req, res) => {
     client.release();
   }
 });
+
+// API Routes
+app.use('/api/fixtures', fixtureRoutes);
+app.use('/api/allocations', allocationRoutes);
+app.use('/api/referees', refereeRoutes);
+app.use('/api', generalRoutes);
 
 // Serve React build in production
 if (process.env.NODE_ENV === 'production') {
