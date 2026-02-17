@@ -40,6 +40,10 @@ app.post('/api/setup', async (req, res) => {
     await client.query(`CREATE TABLE IF NOT EXISTS requests (id SERIAL PRIMARY KEY, requested_by VARCHAR(100), request_type VARCHAR(50), details TEXT, match_date DATE, kick_off TIME, pitch_format VARCHAR(20), status VARCHAR(20) DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())`);
     await client.query(`CREATE TABLE IF NOT EXISTS allocation_history (id SERIAL PRIMARY KEY, team_name VARCHAR(150), pitch_id INTEGER REFERENCES pitches(id), kick_off TIME, match_date DATE, created_at TIMESTAMP DEFAULT NOW())`);
 
+    // --- MIGRATE additions ---
+    // Add max_age_group to pitches (e.g. Shropham 11v11 is U14 max)
+    await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
+
     // --- SEED ---
     const morley = await client.query(`INSERT INTO venues (name) VALUES ('Morley') ON CONFLICT DO NOTHING RETURNING id`);
     const shropham = await client.query(`INSERT INTO venues (name) VALUES ('Shropham') ON CONFLICT DO NOTHING RETURNING id`);
@@ -73,6 +77,12 @@ app.post('/api/setup', async (req, res) => {
       }
     }
 
+    // Shropham 11v11 is undersized — only suitable for U14 and below
+    await client.query(
+      `UPDATE pitches SET max_age_group = 'U14' WHERE venue_id = $1 AND format = '11v11'`,
+      [shrophamId]
+    );
+
     await client.query('COMMIT');
     res.json({ status: 'ok', message: 'Migration and seed complete', venues: { morleyId, shrophamId } });
   } catch (err) {
@@ -82,6 +92,23 @@ app.post('/api/setup', async (req, res) => {
     client.release();
   }
 });
+
+// Auto-migrate: ensure max_age_group column exists and Shropham restriction is set
+(async () => {
+  try {
+    const pool = require('./db/pool');
+    await pool.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
+    await pool.query(
+      `UPDATE pitches SET max_age_group = 'U14'
+       WHERE venue_id = (SELECT id FROM venues WHERE name = 'Shropham' LIMIT 1)
+       AND format = '11v11' AND max_age_group IS NULL`
+    );
+    console.log('Auto-migration: pitches.max_age_group ready');
+  } catch (err) {
+    // Tables may not exist yet (first run before /api/setup) — that's OK
+    console.log('Auto-migration skipped (tables may not exist yet):', err.message);
+  }
+})();
 
 // API Routes
 app.use('/api/fixtures', fixtureRoutes);

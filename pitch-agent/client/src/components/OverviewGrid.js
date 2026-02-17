@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import { getAllocationOverview, getOverviewMessage } from '../utils/api';
+import { getAllocationOverview, getOverviewMessage, generateAllocations } from '../utils/api';
 import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function OverviewGrid() {
@@ -29,6 +29,31 @@ export default function OverviewGrid() {
   }, [thisMonday]);
 
   useEffect(() => { loadOverview(); }, [loadOverview]);
+
+  const handleFetchFixtures = async () => {
+    await loadOverview();
+    showToast('Fixtures refreshed');
+  };
+
+  const handleAutoAllocate = async () => {
+    setLoading(true);
+    try {
+      let totalAllocated = 0;
+      let totalConflicts = 0;
+      // Auto-allocate each of the 4 weeks
+      for (let w = 0; w < 4; w++) {
+        const weekStart = format(addDays(new Date(thisMonday), w * 7), 'yyyy-MM-dd');
+        const res = await generateAllocations(weekStart);
+        totalAllocated += res.data.allocated || 0;
+        totalConflicts += (res.data.conflicts || []).length;
+      }
+      showToast(`Allocated ${totalAllocated} fixtures${totalConflicts ? ` (${totalConflicts} conflicts)` : ''}`);
+      await loadOverview();
+    } catch (err) {
+      showToast('Allocation failed', 'error');
+    }
+    setLoading(false);
+  };
 
   const handleGenerateMessage = async () => {
     setWaLoading(true);
@@ -92,8 +117,14 @@ export default function OverviewGrid() {
         </div>
       </div>
 
-      {/* WhatsApp overview message */}
+      {/* Action bar */}
       <div className="action-bar">
+        <button className="btn btn-outline" onClick={handleFetchFixtures} disabled={loading}>
+          {loading ? '⏳' : '🔄'} Fetch Fixtures
+        </button>
+        <button className="btn btn-primary" onClick={handleAutoAllocate} disabled={loading}>
+          {loading ? '⏳' : '⚡'} Auto-Allocate All
+        </button>
         <button
           className="btn btn-success"
           onClick={handleGenerateMessage}

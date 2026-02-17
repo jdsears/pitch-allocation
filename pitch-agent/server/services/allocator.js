@@ -35,6 +35,16 @@ async function getLastKickOff(teamName, pitchId) {
 }
 
 /**
+ * Extract numeric age from age group string (e.g. "U13" → 13, "U9" → 9).
+ * Returns null if the string doesn't match.
+ */
+function ageGroupNumber(ageGroup) {
+  if (!ageGroup) return null;
+  const m = String(ageGroup).match(/U(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
  * Get day of week from a YYYY-MM-DD date string
  * Parses explicitly to avoid timezone-related off-by-one
  */
@@ -181,29 +191,51 @@ async function allocateFixtures(weekStartDate) {
 
       // Allocate each format group to matching pitches
       for (const [reqFormat, formatFixtures] of Object.entries(byFormat)) {
-        const matchingPitches = pitches.rows.filter(p => p.format === reqFormat);
+        const allMatchingPitches = pitches.rows.filter(p => p.format === reqFormat);
 
-        if (matchingPitches.length === 0) {
+        if (allMatchingPitches.length === 0) {
           formatFixtures.forEach(f => conflicts.push({ fixture: f, reason: `No pitch for format ${reqFormat}` }));
           continue;
         }
 
-        let remaining = [...formatFixtures];
+        // Helper: check if a fixture's age group fits a pitch's max_age_group
+        const fitsPitch = (fixture, pitch) => {
+          if (!pitch.max_age_group) return true; // no restriction
+          const fixtureAge = ageGroupNumber(fixture.age_group);
+          const maxAge = ageGroupNumber(pitch.max_age_group);
+          if (!fixtureAge || !maxAge) return true; // can't compare, allow
+          return fixtureAge <= maxAge;
+        };
 
-        for (const pitch of matchingPitches) {
+        // Split fixtures: those that exceed restricted pitches go first (to unrestricted only)
+        const needsUnrestricted = [];
+        const fitsRestricted = [];
+        for (const f of formatFixtures) {
+          const hasEligibleRestricted = allMatchingPitches.some(p => p.max_age_group && fitsPitch(f, p));
+          if (hasEligibleRestricted) {
+            fitsRestricted.push(f);
+          } else {
+            needsUnrestricted.push(f);
+          }
+        }
+
+        const unrestrictedPitches = allMatchingPitches.filter(p => !p.max_age_group);
+        const restrictedPitches = allMatchingPitches.filter(p => p.max_age_group);
+
+        // Phase 1: Allocate fixtures that need unrestricted pitches (e.g. U15/U16 → Morley only)
+        let remaining = [...needsUnrestricted];
+
+        for (const pitch of unrestrictedPitches) {
           if (remaining.length === 0) break;
           if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
 
-          // Get available slots for this pitch on this day of week
           const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
-          
           if (daySlots.length === 0) continue;
 
           const { allocated, overflow } = await allocateWithRotation(
             remaining, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
           );
 
-          // Save allocations
           for (const { fixture, kickOff } of allocated) {
             const result = await client.query(
               `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
@@ -224,10 +256,50 @@ async function allocateFixtures(weekStartDate) {
           remaining = overflow;
         }
 
+        // Phase 2: Allocate fixtures that fit restricted pitches (e.g. U13/U14 → Shropham OK)
+        // Try restricted pitches first, then overflow to unrestricted
+        remaining = [...remaining, ...fitsRestricted];
+
+        for (const pitch of [...restrictedPitches, ...unrestrictedPitches]) {
+          if (remaining.length === 0) break;
+          if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
+
+          // Filter remaining to only those that fit this pitch
+          const eligible = remaining.filter(f => fitsPitch(f, pitch));
+          const ineligible = remaining.filter(f => !fitsPitch(f, pitch));
+          if (eligible.length === 0) continue;
+
+          const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
+          if (daySlots.length === 0) continue;
+
+          const { allocated, overflow } = await allocateWithRotation(
+            eligible, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
+          );
+
+          for (const { fixture, kickOff } of allocated) {
+            const result = await client.query(
+              `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
+               VALUES ($1, $2, $3, 'draft', $4) RETURNING id`,
+              [fixture.id, pitch.id, kickOff, weekStart]
+            );
+
+            await client.query(
+              `INSERT INTO allocation_history (team_name, pitch_id, kick_off, match_date)
+               VALUES ($1, $2, $3, $4)`,
+              [fixture.home_team, pitch.id, kickOff, date]
+            );
+
+            occupiedSlots[pitch.id].push(kickOff);
+            allAllocations.push({ id: result.rows[0].id, fixture, pitch, kick_off: kickOff });
+          }
+
+          remaining = [...overflow, ...ineligible];
+        }
+
         // Anything left is a conflict
-        remaining.forEach(f => conflicts.push({ 
-          fixture: f, 
-          reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}` 
+        remaining.forEach(f => conflicts.push({
+          fixture: f,
+          reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}`
         }));
       }
     }
