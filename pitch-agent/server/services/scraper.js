@@ -5,6 +5,10 @@ const pool = require('../db/pool');
 
 // Find the system-installed Chromium binary
 function findChromiumPath() {
+  // Prefer env var set in Dockerfile
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
   const candidates = [
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
