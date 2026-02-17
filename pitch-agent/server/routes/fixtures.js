@@ -103,7 +103,9 @@ router.get('/debug', async (req, res) => {
 // GET /api/fixtures/scrape-script - download a one-click scrape script
 router.get('/scrape-script', (req, res) => {
   const platform = req.query.platform || 'mac';
-  const apiUrl = `${req.protocol}://${req.get('host')}`;
+  // Railway terminates TLS at its proxy, so req.protocol is 'http' even for HTTPS
+  const proto = req.get('x-forwarded-proto') || req.protocol;
+  const apiUrl = `${proto}://${req.get('host')}`;
 
   if (platform === 'windows') {
     const script = generateWindowsScript(apiUrl);

@@ -26,7 +26,7 @@ const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 
-const API_URL = ${JSON.stringify(apiUrl)};
+let API_URL = ${JSON.stringify(apiUrl)};
 const BOYS_URL = ${JSON.stringify(boysUrl)};
 const GIRLS_URL = ${JSON.stringify(girlsUrl)};
 
@@ -199,6 +199,10 @@ function parseFixtures(html,label){
 }
 
 async function main(){
+  // Ensure HTTPS for non-localhost URLs (Railway terminates TLS at proxy)
+  if(API_URL.startsWith('http://')&&!API_URL.includes('localhost')&&!API_URL.includes('127.0.0.1')){
+    API_URL=API_URL.replace('http://','https://');
+  }
   console.log('=== Morley YFC Fixture Scraper ===');
   console.log('API: '+API_URL+'\\n');
   const boys=(await scrapePage(BOYS_URL,'Boys')).map(f=>({...f,gender:'boys'}));
