@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { scrapeAll, debugScrape } = require('../services/scraper');
+const { generateMacScript, generateWindowsScript } = require('../services/scrapeScriptGenerator');
 
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
@@ -81,6 +82,24 @@ router.get('/debug', async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+// GET /api/fixtures/scrape-script - download a one-click scrape script
+router.get('/scrape-script', (req, res) => {
+  const platform = req.query.platform || 'mac';
+  const apiUrl = `${req.protocol}://${req.get('host')}`;
+
+  if (platform === 'windows') {
+    const script = generateWindowsScript(apiUrl);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="morley-scrape.ps1"');
+    res.send(script);
+  } else {
+    const script = generateMacScript(apiUrl);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="morley-scrape.command"');
+    res.send(script);
   }
 });
 

@@ -107,7 +107,7 @@ export default function AdminPanel() {
     <div>
       {/* Section tabs */}
       <div className="nav" style={{ marginBottom: 20 }}>
-        {['referees', 'import', 'venues', 'requests'].map(s => (
+        {['referees', 'scrape', 'import', 'venues', 'requests'].map(s => (
           <button
             key={s}
             className={activeSection === s ? 'active' : ''}
@@ -175,6 +175,59 @@ export default function AdminPanel() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Scrape from FA */}
+      {activeSection === 'scrape' && (
+        <div className="card">
+          <div className="card-header">
+            <h2>Scrape FA Full-Time</h2>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
+            FA Full-Time blocks cloud servers, so scraping runs on your computer.
+            Download the script below, double-click it, and fixtures will be imported automatically.
+          </p>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+            <a
+              href="/api/fixtures/scrape-script?platform=mac"
+              download="morley-scrape.command"
+              className="btn btn-primary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              Download for Mac
+            </a>
+            <a
+              href="/api/fixtures/scrape-script?platform=windows"
+              download="morley-scrape.ps1"
+              className="btn btn-primary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              Download for Windows
+            </a>
+          </div>
+
+          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Instructions</h3>
+            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+              <p><strong>Requires:</strong> Node.js installed (<a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a>)</p>
+              <p style={{ marginTop: 8 }}><strong>Mac:</strong></p>
+              <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
+                <li>Download the .command file</li>
+                <li>Open Terminal and run: <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>chmod +x ~/Downloads/morley-scrape.command</code></li>
+                <li>Double-click the file to run it</li>
+              </ol>
+              <p style={{ marginTop: 8 }}><strong>Windows:</strong></p>
+              <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
+                <li>Download the .ps1 file</li>
+                <li>Right-click the file and select "Run with PowerShell"</li>
+              </ol>
+              <p style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12 }}>
+                First run takes ~1 minute to download Chromium. Subsequent runs are faster.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
