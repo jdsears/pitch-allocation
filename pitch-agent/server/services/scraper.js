@@ -1,6 +1,21 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
+const fs = require('fs');
 const pool = require('../db/pool');
+
+// Find the system-installed Chromium binary
+function findChromiumPath() {
+  const candidates = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 // Age group to pitch format mapping
 const AGE_TO_FORMAT = {
@@ -57,11 +72,8 @@ async function scrapeGirlsFixtures() {
 async function scrapeFixturePage(url) {
   let browser;
   try {
-    browser = await puppeteer.launch({
+    const launchOptions = {
       headless: 'new',
-      executablePath: process.env.NODE_ENV === 'production' 
-        ? '/usr/bin/chromium' 
-        : undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -69,7 +81,19 @@ async function scrapeFixturePage(url) {
         '--disable-gpu',
         '--single-process',
       ]
-    });
+    };
+
+    if (process.env.NODE_ENV === 'production') {
+      const chromiumPath = findChromiumPath();
+      if (chromiumPath) {
+        launchOptions.executablePath = chromiumPath;
+        console.log(`Using Chromium at: ${chromiumPath}`);
+      } else {
+        console.warn('No system Chromium found, falling back to Puppeteer bundled Chromium');
+      }
+    }
+
+    browser = await puppeteer.launch(launchOptions);
     
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');

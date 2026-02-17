@@ -3,7 +3,6 @@
     "setup": {
       "aptPkgs": [
         "chromium",
-        "chromium-sandbox",
         "fonts-liberation",
         "libnss3",
         "libatk-bridge2.0-0",
@@ -15,7 +14,7 @@
     },
     "install": {
       "cmds": [
-        "npm install",
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install",
         "cd client && npm install"
       ]
     },
@@ -25,5 +24,7 @@
       ]
     }
   },
-  "start": "node server/index.js"
+  "start": {
+    "cmd": "node server/index.js"
+  }
 }
