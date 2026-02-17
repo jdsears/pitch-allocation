@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import { getAllocationOverview } from '../utils/api';
+import { getAllocationOverview, getOverviewMessage } from '../utils/api';
 import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function OverviewGrid() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [waPreview, setWaPreview] = useState(null);
+  const [waLoading, setWaLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const thisMonday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
@@ -21,6 +29,18 @@ export default function OverviewGrid() {
   }, [thisMonday]);
 
   useEffect(() => { loadOverview(); }, [loadOverview]);
+
+  const handleGenerateMessage = async () => {
+    setWaLoading(true);
+    try {
+      const res = await getOverviewMessage(thisMonday, 4);
+      setWaPreview(res.data.message);
+    } catch (err) {
+      console.error('Failed to generate message:', err);
+      showToast('Failed to generate message', 'error');
+    }
+    setWaLoading(false);
+  };
 
   if (loading) {
     return (
@@ -71,6 +91,37 @@ export default function OverviewGrid() {
           <div className="stat-label">Unallocated</div>
         </div>
       </div>
+
+      {/* WhatsApp overview message */}
+      <div className="action-bar">
+        <button
+          className="btn btn-success"
+          onClick={handleGenerateMessage}
+          disabled={waLoading || totals.games === 0}
+        >
+          {waLoading ? '⏳' : '📲'} Generate WhatsApp Overview
+        </button>
+      </div>
+
+      {waPreview && (
+        <div className="card">
+          <div className="card-header">
+            <h2>📲 WhatsApp Overview Message</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-primary" onClick={() => {
+                navigator.clipboard.writeText(waPreview);
+                showToast('Copied to clipboard!');
+              }}>
+                📋 Copy
+              </button>
+              <button className="btn btn-sm btn-outline" onClick={() => setWaPreview(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <div className="wa-preview">{waPreview}</div>
+        </div>
+      )}
 
       {/* Per-week sections */}
       {overview.weeks.map((week) => {
@@ -175,6 +226,11 @@ export default function OverviewGrid() {
           </div>
         );
       })}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>{toast.msg}</div>
+      )}
     </div>
   );
 }

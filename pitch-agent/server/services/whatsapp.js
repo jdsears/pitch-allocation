@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { format } = require('date-fns');
-const { getWeekSummary, getAllocationGrid } = require('./allocator');
+const { getWeekSummary, getAllocationGrid, getMultiWeekOverview } = require('./allocator');
 
 /**
  * Safely parse a YYYY-MM-DD date string into a local Date object.
@@ -159,4 +159,73 @@ async function sendWeeklyAllocation(weekStartDate, gridUrl) {
   return { ...result, message: summaryMsg };
 }
 
-module.exports = { sendWhatsAppMessage, sendWeeklyAllocation, formatWeeklySummary, formatDetailedGrid };
+function formatOverviewMessage(overviewData, baseUrl) {
+  const startLabel = safeFormat(overviewData.weekStart, 'do MMM', overviewData.weekStart);
+  const endLabel = safeFormat(overviewData.overviewEnd, 'do MMM yyyy', overviewData.overviewEnd);
+
+  let msg = `⚽ *4-WEEK OVERVIEW*\n`;
+  msg += `📅 ${startLabel} — ${endLabel}\n`;
+
+  // Aggregate totals
+  let totalGames = 0;
+  let totalRefs = 0;
+  let totalNeeded = 0;
+  for (const week of overviewData.weeks) {
+    totalGames += week.totalGames;
+    totalRefs += week.refsAssigned;
+    totalNeeded += week.refsNeeded;
+  }
+  msg += `📊 ${totalGames} games | ${totalRefs} refs assigned | ${totalNeeded} needed\n`;
+  msg += `━━━━━━━━━━━━━━━\n`;
+
+  for (const week of overviewData.weeks) {
+    const wsLabel = safeFormat(week.weekStart, 'do MMM', week.weekStart);
+    const icon = week.refsNeeded === 0 ? '🟢' : week.refsNeeded <= 2 ? '🟠' : '🔴';
+
+    msg += `\n📅 *Week of ${wsLabel}*\n`;
+
+    if (week.totalGames === 0) {
+      msg += `No fixtures\n`;
+      continue;
+    }
+
+    msg += `${icon} ${week.totalGames} game${week.totalGames !== 1 ? 's' : ''}`;
+    if (week.refsNeeded > 0) {
+      msg += ` (${week.refsNeeded} need a ref)`;
+    }
+    if (week.unallocated > 0) {
+      msg += ` + ${week.unallocated} unallocated`;
+    }
+    msg += `\n\n`;
+
+    // Group allocations by date
+    let currentDate = null;
+    for (const a of week.allocations) {
+      if (a.match_date !== currentDate) {
+        currentDate = a.match_date;
+        const dayLabel = safeFormat(a.match_date, 'EEE do MMM', a.match_date);
+        msg += `*${dayLabel}*\n`;
+      }
+      const ko = a.kick_off?.substring(0, 5) || '??:??';
+      const refIcon = a.referee ? '🟢' : '🔴';
+      const ref = a.referee || 'REF NEEDED';
+      msg += `⏱ ${ko} | ${a.home_team} v ${a.away_team}\n`;
+      msg += `     📍 ${a.venue_name} ${a.pitch_name} | ${a.age_group} | ${refIcon} ${ref}\n`;
+    }
+  }
+
+  msg += `\n━━━━━━━━━━━━━━━\n`;
+
+  if (baseUrl) {
+    msg += `\n📋 Full allocation + ref sign-up:\n${baseUrl}/grid`;
+  }
+
+  return msg;
+}
+
+async function generateOverviewMessage(startDate, numWeeks, baseUrl) {
+  const overviewData = await getMultiWeekOverview(startDate, numWeeks);
+  return formatOverviewMessage(overviewData, baseUrl);
+}
+
+module.exports = { sendWhatsAppMessage, sendWeeklyAllocation, formatWeeklySummary, formatDetailedGrid, generateOverviewMessage };

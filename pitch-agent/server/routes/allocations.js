@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { allocateFixtures, getAllocationGrid, getWeekSummary, getMultiWeekOverview } = require('../services/allocator');
-const { sendWeeklyAllocation, formatWeeklySummary } = require('../services/whatsapp');
+const { sendWeeklyAllocation, formatWeeklySummary, generateOverviewMessage } = require('../services/whatsapp');
 
 // GET /api/allocations/overview?weeks=4
 router.get('/overview', async (req, res) => {
@@ -125,6 +125,18 @@ router.post('/publish', async (req, res) => {
       whatsapp: waResult,
       message: waResult.message
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/allocations/overview-message - generate 4-week overview WhatsApp message
+router.post('/overview-message', async (req, res) => {
+  try {
+    const { week, weeks } = req.body;
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const message = await generateOverviewMessage(week, weeks || 4, baseUrl);
+    res.json({ message });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

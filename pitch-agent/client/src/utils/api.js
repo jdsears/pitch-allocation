@@ -26,6 +26,7 @@ export const updateAllocation = (id, data) => api.put(`/allocations/${id}`, data
 export const deleteAllocation = (id) => api.delete(`/allocations/${id}`);
 export const confirmAllocations = (week) => api.post('/allocations/confirm', { week });
 export const publishAllocations = (week) => api.post('/allocations/publish', { week });
+export const getOverviewMessage = (week, weeks = 4) => api.post('/allocations/overview-message', { week, weeks });
 export const getAllocationSummary = (week) => api.get('/allocations/summary', { params: { week } });
 
 // Referees
