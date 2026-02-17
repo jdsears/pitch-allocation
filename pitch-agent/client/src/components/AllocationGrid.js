@@ -254,11 +254,13 @@ export default function AllocationGrid({ isAdmin = false }) {
                 </tr>
               </thead>
               <tbody>
-                {fixtures.map((f) => {
-                  const dayName = formatMatchDay(f.match_date);
-                  const dayLabel = `${dayName} ${format(new Date(f.match_date + 'T12:00:00'), 'd/M')}`;
+                {fixtures.map((f, i) => {
+                  const dayName = f.match_date ? formatMatchDay(f.match_date) : 'TBC';
+                  const dayLabel = f.match_date
+                    ? `${dayName} ${format(new Date(f.match_date + 'T12:00:00'), 'd/M')}`
+                    : 'TBC';
                   return (
-                    <tr key={f.id}>
+                    <tr key={f.id || i}>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <span className={`badge ${dayName === 'Saturday' ? 'badge-amber' : 'badge-blue'}`}>
                           {dayLabel}
@@ -268,12 +270,12 @@ export default function AllocationGrid({ isAdmin = false }) {
                       <td style={{ fontWeight: 500 }}>{cleanTeamName(f.home_team)}</td>
                       <td style={{ color: 'var(--text-secondary)' }}>{cleanTeamName(f.away_team)}</td>
                       <td>
-                        <span className="badge badge-blue">{f.age_group}</span>
+                        <span className="badge badge-blue">{f.age_group || '—'}</span>
                         {f.gender === 'girls' && (
                           <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
                         )}
                       </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format}</td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format || '—'}</td>
                     </tr>
                   );
                 })}
@@ -292,7 +294,7 @@ export default function AllocationGrid({ isAdmin = false }) {
       )}
 
       {/* Allocation grid by venue, grouped by day */}
-      {grid && !loading && (
+      {grid?.grid && !loading && (
         <>
           {Object.keys(grid.grid).length === 0 && fixtureCount === 0 ? (
             <div className="empty-state">
