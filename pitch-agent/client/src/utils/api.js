@@ -8,6 +8,15 @@ const api = axios.create({ baseURL: API_BASE });
 export const getFixtures = (params) => api.get('/fixtures', { params });
 export const scrapeFixtures = () => api.post('/fixtures/scrape');
 export const importFixtures = (fixtures) => api.post('/fixtures/import', { fixtures });
+export const importFixtureImage = (file, gender) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  if (gender) formData.append('gender', gender);
+  return api.post('/fixtures/import-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  });
+};
 
 // Allocations
 export const getAllocationGrid = (week) => api.get('/allocations/grid', { params: { week } });

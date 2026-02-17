@@ -5,6 +5,7 @@ import {
   updateReferee,
   getVenues,
   importFixtures,
+  importFixtureImage,
   getRequests,
   updateRequest,
 } from '../utils/api';
@@ -17,6 +18,11 @@ export default function AdminPanel() {
   const [importText, setImportText] = useState('');
   const [toast, setToast] = useState(null);
   const [activeSection, setActiveSection] = useState('referees');
+  const [ocrFile, setOcrFile] = useState(null);
+  const [ocrGender, setOcrGender] = useState('boys');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrPreview, setOcrPreview] = useState(null);
+  const [ocrResult, setOcrResult] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -90,6 +96,41 @@ export default function AdminPanel() {
       setImportText('');
     } catch (err) {
       showToast('Import failed - check format', 'error');
+    }
+  };
+
+  const handleOcrFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setOcrFile(file);
+      setOcrResult(null);
+      const reader = new FileReader();
+      reader.onload = (ev) => setOcrPreview(ev.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleOcrImport = async () => {
+    if (!ocrFile) return;
+    setOcrLoading(true);
+    setOcrResult(null);
+    try {
+      const res = await importFixtureImage(ocrFile, ocrGender);
+      const { fixtures, saved } = res.data;
+      setOcrResult({ fixtures, saved });
+      if (saved > 0) {
+        showToast(`Imported ${saved} fixtures from image`);
+      } else if (fixtures.length === 0) {
+        showToast('No fixtures found in image', 'error');
+      } else {
+        showToast(`Found ${fixtures.length} fixtures, ${saved} new`);
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message;
+      showToast(`OCR failed: ${msg}`, 'error');
+      setOcrResult({ error: msg });
+    } finally {
+      setOcrLoading(false);
     }
   };
 
@@ -208,21 +249,50 @@ export default function AdminPanel() {
             </a>
           </div>
 
-          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Instructions</h3>
+          {/* Node.js Installation */}
+          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Step 1: Install Node.js (if you don't have it)</h3>
             <div style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-              <p><strong>Requires:</strong> Node.js installed (<a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a>)</p>
-              <p style={{ marginTop: 8 }}><strong>Mac:</strong></p>
+              <p style={{ marginBottom: 8 }}>The scrape script requires Node.js. Check if it's installed by opening Terminal (Mac) or PowerShell (Windows) and typing: <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>node --version</code></p>
+
+              <p><strong>Mac:</strong></p>
+              <ol style={{ paddingLeft: 20, margin: '4px 0 12px' }}>
+                <li>Go to <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a></li>
+                <li>Click the <strong>LTS</strong> (recommended) download button</li>
+                <li>Open the downloaded <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>.pkg</code> file and follow the installer</li>
+                <li>Restart Terminal if it was open</li>
+              </ol>
+
+              <p><strong>Windows:</strong></p>
               <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
-                <li>Download the .command file</li>
+                <li>Go to <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a></li>
+                <li>Click the <strong>LTS</strong> (recommended) download button</li>
+                <li>Run the downloaded <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>.msi</code> installer, accept defaults</li>
+                <li>Restart PowerShell if it was open</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Running the Script */}
+          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Step 2: Run the Scrape Script</h3>
+            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+              <p style={{ marginBottom: 4 }}><strong>Mac:</strong></p>
+              <ol style={{ paddingLeft: 20, margin: '4px 0 12px' }}>
+                <li>Download the <strong>.command</strong> file above</li>
                 <li>Open Terminal and run: <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>chmod +x ~/Downloads/morley-scrape.command</code></li>
-                <li>Double-click the file to run it</li>
+                <li><strong>Important:</strong> Don't double-click — instead <strong>right-click</strong> the file and select <strong>"Open"</strong></li>
+                <li>If you see "macOS cannot verify the developer" — click <strong>"Open"</strong> in the dialog</li>
+                <li>You only need to do this once. After that, double-click works fine.</li>
               </ol>
-              <p style={{ marginTop: 8 }}><strong>Windows:</strong></p>
+
+              <p style={{ marginBottom: 4 }}><strong>Windows:</strong></p>
               <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
-                <li>Download the .ps1 file</li>
-                <li>Right-click the file and select "Run with PowerShell"</li>
+                <li>Download the <strong>.ps1</strong> file above</li>
+                <li>Right-click the file and select <strong>"Run with PowerShell"</strong></li>
+                <li>If prompted about execution policy, type <strong>Y</strong> and press Enter</li>
               </ol>
+
               <p style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12 }}>
                 First run takes ~1 minute to download Chromium. Subsequent runs are faster.
               </p>
@@ -233,39 +303,131 @@ export default function AdminPanel() {
 
       {/* Import */}
       {activeSection === 'import' && (
-        <div className="card">
-          <div className="card-header">
-            <h2>📥 Manual Fixture Import</h2>
+        <>
+          {/* OCR Image Import */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <h2>Import from Screenshot</h2>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+              Take a screenshot of fixtures from FA Full-Time and upload it here. AI will extract the fixture data automatically.
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleOcrFileChange}
+                style={{ fontSize: 13 }}
+              />
+              <select
+                value={ocrGender}
+                onChange={e => setOcrGender(e.target.value)}
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  fontSize: 13,
+                }}
+              >
+                <option value="boys">Boys</option>
+                <option value="girls">Girls</option>
+              </select>
+              <button
+                className="btn btn-primary"
+                onClick={handleOcrImport}
+                disabled={!ocrFile || ocrLoading}
+              >
+                {ocrLoading ? 'Extracting...' : 'Extract & Import'}
+              </button>
+            </div>
+
+            {ocrPreview && (
+              <div style={{ marginBottom: 12 }}>
+                <img
+                  src={ocrPreview}
+                  alt="Fixture screenshot"
+                  style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid var(--border)' }}
+                />
+              </div>
+            )}
+
+            {ocrResult && ocrResult.error && (
+              <div style={{ background: '#fee', color: '#c00', padding: 12, borderRadius: 8, fontSize: 13 }}>
+                {ocrResult.error}
+              </div>
+            )}
+
+            {ocrResult && ocrResult.fixtures && ocrResult.fixtures.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  Found {ocrResult.fixtures.length} fixtures, {ocrResult.saved} saved to database:
+                </p>
+                <table className="grid-table" style={{ fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>KO</th>
+                      <th>Home</th>
+                      <th>Away</th>
+                      <th>Age</th>
+                      <th>H/A</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ocrResult.fixtures.map((f, i) => (
+                      <tr key={i}>
+                        <td>{f.match_date}</td>
+                        <td>{f.kick_off || '—'}</td>
+                        <td>{f.home_team}</td>
+                        <td>{f.away_team}</td>
+                        <td>{f.age_group || '—'}</td>
+                        <td>{f.is_home_game ? 'H' : 'A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-            If the FA scraper can't reach the site, paste fixtures here. One per line:
-          </p>
-          <code style={{ display: 'block', background: 'var(--bg-input)', padding: 12, borderRadius: 8, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            YYYY-MM-DD, HH:MM, Home Team, Away Team, U13, boys
-          </code>
-          <textarea
-            value={importText}
-            onChange={e => setImportText(e.target.value)}
-            placeholder={`2026-03-21, 10:00, Morley YFC U13 Stallions, Wymondham Town U13, U13, boys\n2026-03-21, 12:00, Morley YFC U10 Hawks, Hethersett U10, U10, boys`}
-            style={{
-              width: '100%',
-              minHeight: 150,
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
-              padding: 12,
-              borderRadius: 8,
-              fontSize: 13,
-              fontFamily: 'monospace',
-              resize: 'vertical',
-            }}
-          />
-          <div style={{ marginTop: 12 }}>
-            <button className="btn btn-primary" onClick={handleImport} disabled={!importText.trim()}>
-              Import Fixtures
-            </button>
+
+          {/* CSV Import */}
+          <div className="card">
+            <div className="card-header">
+              <h2>Import from Text</h2>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+              Paste fixtures manually, one per line:
+            </p>
+            <code style={{ display: 'block', background: 'var(--bg-input)', padding: 12, borderRadius: 8, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              YYYY-MM-DD, HH:MM, Home Team, Away Team, U13, boys
+            </code>
+            <textarea
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={`2026-03-21, 10:00, Morley YFC U13 Stallions, Wymondham Town U13, U13, boys\n2026-03-21, 12:00, Morley YFC U10 Hawks, Hethersett U10, U10, boys`}
+              style={{
+                width: '100%',
+                minHeight: 150,
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+                padding: 12,
+                borderRadius: 8,
+                fontSize: 13,
+                fontFamily: 'monospace',
+                resize: 'vertical',
+              }}
+            />
+            <div style={{ marginTop: 12 }}>
+              <button className="btn btn-primary" onClick={handleImport} disabled={!importText.trim()}>
+                Import Fixtures
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Venues */}

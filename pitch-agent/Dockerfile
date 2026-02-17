@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install server dependencies (skip Puppeteer's Chromium download for build stage)
 COPY package.json package-lock.json* ./
-RUN PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install
+RUN PUPPETEER_SKIP_DOWNLOAD=true PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install
 
 # Install client dependencies and build
 COPY client/package.json client/package-lock.json* ./client/
@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Tell Puppeteer to use the system Chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
@@ -37,7 +38,7 @@ WORKDIR /app
 
 # Install production dependencies only
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+RUN PUPPETEER_SKIP_DOWNLOAD=true npm install --omit=dev
 
 # Copy server code
 COPY server/ ./server/
