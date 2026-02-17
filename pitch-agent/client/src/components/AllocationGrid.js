@@ -39,16 +39,22 @@ export default function AllocationGrid({ isAdmin = false }) {
     setLoading(true);
     try {
       const weekEndDate = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
-      const [gridRes, summaryRes, refsRes, fixturesRes] = await Promise.all([
+      const [gridRes, summaryRes, refsRes] = await Promise.all([
         getAllocationGrid(weekDate),
         getAllocationSummary(weekDate),
         getReferees(),
-        getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' }),
       ]);
       setGrid(gridRes.data);
       setSummary(summaryRes.data);
       setReferees(refsRes.data);
-      setFixtures(fixturesRes.data);
+      // Fetch fixtures separately so a failure doesn't blank the whole page
+      try {
+        const fixturesRes = await getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' });
+        setFixtures(Array.isArray(fixturesRes.data) ? fixturesRes.data : []);
+      } catch (fixErr) {
+        console.error('Failed to load fixtures:', fixErr);
+        setFixtures([]);
+      }
     } catch (err) {
       console.error(err);
     }
