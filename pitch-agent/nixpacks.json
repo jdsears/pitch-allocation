@@ -9,7 +9,7 @@
         "libdrm2",
         "libxkbcommon0",
         "libgbm1",
-        "libasound2"
+        "libasound2t64"
       ]
     },
     "install": {
