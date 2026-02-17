@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import { getAllocationOverview, getOverviewMessage, generateAllocations } from '../utils/api';
+import { getAllocationOverview, getOverviewMessage, generateAllocations, confirmAllocations } from '../utils/api';
 import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function OverviewGrid() {
@@ -8,6 +8,7 @@ export default function OverviewGrid() {
   const [loading, setLoading] = useState(false);
   const [waPreview, setWaPreview] = useState(null);
   const [waLoading, setWaLoading] = useState(false);
+  const [showConfirmAll, setShowConfirmAll] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = 'success') => {
@@ -67,6 +68,29 @@ export default function OverviewGrid() {
     setWaLoading(false);
   };
 
+  const handleConfirmAll = async () => {
+    setShowConfirmAll(false);
+    setLoading(true);
+    try {
+      let totalConfirmed = 0;
+      for (let w = 0; w < 4; w++) {
+        const weekStart = format(addDays(new Date(thisMonday), w * 7), 'yyyy-MM-dd');
+        await confirmAllocations(weekStart);
+        totalConfirmed++;
+      }
+      showToast('All draft allocations confirmed');
+      await loadOverview();
+    } catch (err) {
+      showToast('Confirm failed', 'error');
+    }
+    setLoading(false);
+  };
+
+  // Count drafts across all weeks
+  const draftCount = overview?.weeks?.reduce(
+    (sum, w) => sum + w.allocations.filter(a => a.status === 'draft').length, 0
+  ) || 0;
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
@@ -124,6 +148,13 @@ export default function OverviewGrid() {
         </button>
         <button className="btn btn-primary" onClick={handleAutoAllocate} disabled={loading}>
           {loading ? '⏳' : '⚡'} Auto-Allocate All
+        </button>
+        <button
+          className="btn btn-success"
+          onClick={() => setShowConfirmAll(true)}
+          disabled={loading || draftCount === 0}
+        >
+          Confirm All ({draftCount} draft{draftCount !== 1 ? 's' : ''})
         </button>
         <button
           className="btn btn-success"
@@ -257,6 +288,23 @@ export default function OverviewGrid() {
           </div>
         );
       })}
+
+      {/* Confirm All Modal */}
+      {showConfirmAll && (
+        <div className="modal-overlay" onClick={() => setShowConfirmAll(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Confirm All Allocations</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
+              This will confirm {draftCount} draft allocation{draftCount !== 1 ? 's' : ''} across all 4 weeks.
+              Confirmed allocations won't be changed by Auto-Allocate.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-outline" onClick={() => setShowConfirmAll(false)}>Cancel</button>
+              <button className="btn btn-success" onClick={handleConfirmAll}>Confirm All</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
