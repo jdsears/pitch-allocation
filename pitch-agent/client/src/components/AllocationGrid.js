@@ -3,7 +3,7 @@ import { format, startOfWeek, addWeeks, subWeeks, addDays } from 'date-fns';
 import {
   getAllocationGrid,
   generateAllocations,
-  scrapeFixtures,
+  getFixtures,
   publishAllocations,
   getAllocationSummary,
   updateAllocation,
@@ -53,14 +53,20 @@ export default function AllocationGrid({ isAdmin = false }) {
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
-  const handleScrape = async () => {
+  const handleFetchFixtures = async () => {
     setLoading(true);
     try {
-      const res = await scrapeFixtures();
-      showToast(`Scraped ${res.data.total} fixtures (${res.data.saved} saved)`);
+      const weekEnd = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
+      const res = await getFixtures({ dateFrom: weekDate, dateTo: weekEnd, homeOnly: 'true' });
+      const count = res.data.length;
+      if (count > 0) {
+        showToast(`${count} home fixture${count !== 1 ? 's' : ''} found for this week. Click Auto-Allocate to assign pitches.`);
+      } else {
+        showToast('No home fixtures for this week. Import via Admin > Import tab.', 'error');
+      }
       loadGrid();
     } catch (err) {
-      showToast('Scrape failed — check console', 'error');
+      showToast('Failed to fetch fixtures', 'error');
     }
     setLoading(false);
   };
@@ -195,7 +201,7 @@ export default function AllocationGrid({ isAdmin = false }) {
       {/* Admin actions */}
       {isAdmin && (
         <div className="action-bar">
-          <button className="btn btn-outline" onClick={handleScrape} disabled={loading}>
+          <button className="btn btn-outline" onClick={handleFetchFixtures} disabled={loading}>
             {loading ? '⏳' : '🔄'} Fetch Fixtures
           </button>
           <button className="btn btn-primary" onClick={handleGenerate} disabled={loading}>
@@ -232,7 +238,7 @@ export default function AllocationGrid({ isAdmin = false }) {
       {loading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
           <div className="spinner" />
-          <p style={{ marginTop: 12 }}>Loading allocations...</p>
+          <p style={{ marginTop: 12 }}>Loading fixtures...</p>
         </div>
       )}
 
