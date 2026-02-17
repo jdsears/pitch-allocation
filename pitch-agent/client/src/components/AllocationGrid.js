@@ -21,6 +21,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [grid, setGrid] = useState(null);
   const [summary, setSummary] = useState(null);
   const [referees, setReferees] = useState([]);
+  const [fixtures, setFixtures] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [waPreview, setWaPreview] = useState(null);
@@ -37,14 +38,17 @@ export default function AllocationGrid({ isAdmin = false }) {
   const loadGrid = useCallback(async () => {
     setLoading(true);
     try {
-      const [gridRes, summaryRes, refsRes] = await Promise.all([
+      const weekEndDate = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
+      const [gridRes, summaryRes, refsRes, fixturesRes] = await Promise.all([
         getAllocationGrid(weekDate),
         getAllocationSummary(weekDate),
         getReferees(),
+        getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' }),
       ]);
       setGrid(gridRes.data);
       setSummary(summaryRes.data);
       setReferees(refsRes.data);
+      setFixtures(fixturesRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -54,21 +58,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
   const handleFetchFixtures = async () => {
-    setLoading(true);
-    try {
-      const weekEnd = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
-      const res = await getFixtures({ dateFrom: weekDate, dateTo: weekEnd, homeOnly: 'true' });
-      const count = res.data.length;
-      if (count > 0) {
-        showToast(`${count} home fixture${count !== 1 ? 's' : ''} found for this week. Click Auto-Allocate to assign pitches.`);
-      } else {
-        showToast('No home fixtures for this week. Import via Admin > Import tab.', 'error');
-      }
-      loadGrid();
-    } catch (err) {
-      showToast('Failed to fetch fixtures', 'error');
-    }
-    setLoading(false);
+    await loadGrid();
   };
 
   const handleGenerate = async () => {
@@ -154,6 +144,8 @@ export default function AllocationGrid({ isAdmin = false }) {
   const totalGames = summary?.venues?.reduce((s, v) => s + parseInt(v.total_games), 0) || 0;
   const refsNeeded = summary?.unrefereed?.length || 0;
   const refsClaimed = totalGames - refsNeeded;
+  const fixtureCount = fixtures?.length || 0;
+  const unallocatedCount = fixtureCount - totalGames;
 
   return (
     <div>
@@ -234,6 +226,57 @@ export default function AllocationGrid({ isAdmin = false }) {
         </div>
       )}
 
+      {/* Fixtures table - shows imported home fixtures for the week */}
+      {fixtures && !loading && fixtureCount > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h2>Fixtures This Week ({fixtureCount})</h2>
+            {isAdmin && unallocatedCount > 0 && (
+              <span className="badge badge-amber">{unallocatedCount} unallocated</span>
+            )}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="grid-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>KO</th>
+                  <th>Home</th>
+                  <th>Away</th>
+                  <th>Age</th>
+                  <th>Format</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fixtures.map((f) => {
+                  const dayName = formatMatchDay(f.match_date);
+                  const dayLabel = `${dayName} ${format(new Date(f.match_date + 'T12:00:00'), 'd/M')}`;
+                  return (
+                    <tr key={f.id}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${dayName === 'Saturday' ? 'badge-amber' : 'badge-blue'}`}>
+                          {dayLabel}
+                        </span>
+                      </td>
+                      <td><strong>{f.kick_off?.substring(0, 5) || '—'}</strong></td>
+                      <td style={{ fontWeight: 500 }}>{cleanTeamName(f.home_team)}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{cleanTeamName(f.away_team)}</td>
+                      <td>
+                        <span className="badge badge-blue">{f.age_group}</span>
+                        {f.gender === 'girls' && (
+                          <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
+                        )}
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Loading spinner */}
       {loading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
@@ -245,10 +288,15 @@ export default function AllocationGrid({ isAdmin = false }) {
       {/* Allocation grid by venue, grouped by day */}
       {grid && !loading && (
         <>
-          {Object.keys(grid.grid).length === 0 ? (
+          {Object.keys(grid.grid).length === 0 && fixtureCount === 0 ? (
             <div className="empty-state">
-              <h3>No allocations for this week</h3>
-              <p>Fetch fixtures from the FA and run auto-allocate to get started.</p>
+              <h3>No fixtures for this week</h3>
+              <p>Import fixtures via the Scrape script or Admin > Import tab.</p>
+            </div>
+          ) : Object.keys(grid.grid).length === 0 && fixtureCount > 0 ? (
+            <div className="empty-state">
+              <h3>Fixtures found — not yet allocated</h3>
+              <p>Click Auto-Allocate to assign pitches and kick-off times.</p>
             </div>
           ) : (
             Object.entries(grid.grid).map(([venue, pitches]) => (
