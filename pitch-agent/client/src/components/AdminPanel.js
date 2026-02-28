@@ -15,7 +15,8 @@ export default function AdminPanel() {
   const [venues, setVenues] = useState([]);
   const [requests, setRequests] = useState([]);
   const [newRef, setNewRef] = useState({ name: '', phone: '' });
-  const [importText, setImportText] = useState('');
+  const emptyFixture = { match_date: '', kick_off: '', home_team: '', away_team: '', age_group: 'U13', gender: 'boys' };
+  const [manualRows, setManualRows] = useState([{ ...emptyFixture }]);
   const [toast, setToast] = useState(null);
   const [activeSection, setActiveSection] = useState('referees');
   const [ocrFile, setOcrFile] = useState(null);
@@ -70,36 +71,47 @@ export default function AdminPanel() {
     }
   };
 
+  const updateRow = (index, field, value) => {
+    setManualRows(rows => rows.map((r, i) => i === index ? { ...r, [field]: value } : r));
+  };
+
+  const addRow = () => setManualRows(rows => [...rows, { ...emptyFixture }]);
+
+  const removeRow = (index) => {
+    setManualRows(rows => rows.length === 1 ? [{ ...emptyFixture }] : rows.filter((_, i) => i !== index));
+  };
+
   const handleImport = async () => {
     try {
-      // Parse CSV-like input: date, kick_off, home_team, away_team, age_group, gender
-      const lines = importText.trim().split('\n').filter(l => l.trim());
-      const fixtures = lines.map(line => {
-        const parts = line.split(',').map(s => s.trim());
-        const ageGroup = parts[4] || '';
-        const gender = parts[5] || 'boys';
-        const boysFormatMap = { U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
-        // Girls play formats one year later (NWGFL): U9 5v5, U11 7v7, U13/U14 9v9
-        const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
-        const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
+      const boysFormatMap = { U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
+      const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
+
+      const valid = manualRows.filter(r => r.match_date && r.home_team && r.away_team);
+      if (valid.length === 0) {
+        showToast('Fill in at least date, home & away team', 'error');
+        return;
+      }
+
+      const fixtures = valid.map(r => {
+        const formatMap = r.gender === 'girls' ? girlsFormatMap : boysFormatMap;
         return {
-          match_date: parts[0],
-          kick_off: parts[1] || null,
-          home_team: parts[2],
-          away_team: parts[3],
-          age_group: ageGroup,
-          gender,
-          format: formatMap[ageGroup] || '11v11',
+          match_date: r.match_date,
+          kick_off: r.kick_off || null,
+          home_team: r.home_team,
+          away_team: r.away_team,
+          age_group: r.age_group,
+          gender: r.gender,
+          format: formatMap[r.age_group] || '11v11',
           is_home_game: true,
           match_type: 'League / Cup',
         };
       });
 
       const res = await importFixtures(fixtures);
-      showToast(`Imported ${res.data.saved} fixtures`);
-      setImportText('');
+      showToast(`Imported ${res.data.saved} fixture${res.data.saved !== 1 ? 's' : ''}`);
+      setManualRows([{ ...emptyFixture }]);
     } catch (err) {
-      showToast('Import failed - check format', 'error');
+      showToast('Import failed', 'error');
     }
   };
 
@@ -397,38 +409,106 @@ export default function AdminPanel() {
             )}
           </div>
 
-          {/* CSV Import */}
+          {/* Manual Add */}
           <div className="card">
             <div className="card-header">
-              <h2>Import from Text</h2>
+              <h2>Add Match Manually</h2>
+              <button className="btn btn-sm btn-outline" onClick={addRow}>+ Add Row</button>
             </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-              Paste fixtures manually, one per line:
-            </p>
-            <code style={{ display: 'block', background: 'var(--bg-input)', padding: 12, borderRadius: 8, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-              YYYY-MM-DD, HH:MM, Home Team, Away Team, U13, boys
-            </code>
-            <textarea
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-              placeholder={`2026-03-21, 10:00, Morley YFC U13 Stallions, Wymondham Town U13, U13, boys\n2026-03-21, 12:00, Morley YFC U10 Hawks, Hethersett U10, U10, boys`}
-              style={{
-                width: '100%',
-                minHeight: 150,
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-primary)',
-                padding: 12,
-                borderRadius: 8,
-                fontSize: 13,
-                fontFamily: 'monospace',
-                resize: 'vertical',
-              }}
-            />
-            <div style={{ marginTop: 12 }}>
-              <button className="btn btn-primary" onClick={handleImport} disabled={!importText.trim()}>
-                Import Fixtures
+
+            {manualRows.map((row, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr auto',
+                  gap: 8,
+                  alignItems: 'center',
+                  marginBottom: 8,
+                  padding: 10,
+                  background: 'var(--bg-input)',
+                  borderRadius: 8,
+                }}
+              >
+                <input
+                  type="date"
+                  value={row.match_date}
+                  onChange={e => updateRow(idx, 'match_date', e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                <input
+                  type="time"
+                  value={row.kick_off}
+                  onChange={e => updateRow(idx, 'kick_off', e.target.value)}
+                  placeholder="KO"
+                  style={{ fontSize: 13 }}
+                />
+                <input
+                  type="text"
+                  value={row.home_team}
+                  onChange={e => updateRow(idx, 'home_team', e.target.value)}
+                  placeholder="Home team"
+                  style={{ fontSize: 13 }}
+                />
+                <input
+                  type="text"
+                  value={row.away_team}
+                  onChange={e => updateRow(idx, 'away_team', e.target.value)}
+                  placeholder="Away team"
+                  style={{ fontSize: 13 }}
+                />
+                <select
+                  value={row.age_group}
+                  onChange={e => updateRow(idx, 'age_group', e.target.value)}
+                  style={{ fontSize: 13, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
+                >
+                  {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+                    <option key={ag} value={ag}>{ag}</option>
+                  ))}
+                </select>
+                <select
+                  value={row.gender}
+                  onChange={e => updateRow(idx, 'gender', e.target.value)}
+                  style={{ fontSize: 13, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
+                >
+                  <option value="boys">Boys</option>
+                  <option value="girls">Girls</option>
+                </select>
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => removeRow(idx)}
+                  title="Remove row"
+                  style={{ padding: '4px 8px', color: 'var(--red)' }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            {/* Labels row */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr auto',
+              gap: 8,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              padding: '0 10px',
+              marginBottom: 12,
+            }}>
+              <span>Date</span>
+              <span>Kick-off</span>
+              <span>Home Team</span>
+              <span>Away Team</span>
+              <span>Age</span>
+              <span>Gender</span>
+              <span></span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleImport} disabled={manualRows.every(r => !r.match_date && !r.home_team)}>
+                Import {manualRows.filter(r => r.match_date && r.home_team && r.away_team).length} Fixture{manualRows.filter(r => r.match_date && r.home_team && r.away_team).length !== 1 ? 's' : ''}
               </button>
+              <button className="btn btn-outline" onClick={addRow}>+ Add Another</button>
             </div>
           </div>
         </>
