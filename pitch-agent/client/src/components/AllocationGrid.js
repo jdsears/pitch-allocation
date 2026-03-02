@@ -153,6 +153,21 @@ export default function AllocationGrid({ isAdmin = false }) {
   const fixtureCount = fixtures?.length || 0;
   const unallocatedCount = fixtureCount - totalGames;
 
+  // Build a lookup from home_team+away_team → allocation data so fixtures table can show allocated KO
+  const allocationLookup = {};
+  if (grid?.grid) {
+    for (const pitches of Object.values(grid.grid)) {
+      for (const dates of Object.values(pitches)) {
+        for (const allocations of Object.values(dates)) {
+          for (const a of allocations) {
+            const key = `${a.home_team}||${a.away_team}`;
+            allocationLookup[key] = a;
+          }
+        }
+      }
+    }
+  }
+
   return (
     <div>
       {/* Week navigation */}
@@ -251,6 +266,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                   <th>Away</th>
                   <th>Age</th>
                   <th>Format</th>
+                  {isAdmin && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -260,6 +276,8 @@ export default function AllocationGrid({ isAdmin = false }) {
                   const dayLabel = parsedFixDate
                     ? `${dayName} ${format(parsedFixDate, 'd/M')}`
                     : 'TBC';
+                  const alloc = allocationLookup[`${f.home_team}||${f.away_team}`];
+                  const displayKO = alloc?.kick_off?.substring(0, 5) || f.kick_off?.substring(0, 5) || '—';
                   return (
                     <tr key={f.id || i}>
                       <td style={{ whiteSpace: 'nowrap' }}>
@@ -267,7 +285,21 @@ export default function AllocationGrid({ isAdmin = false }) {
                           {dayLabel}
                         </span>
                       </td>
-                      <td><strong>{f.kick_off?.substring(0, 5) || '—'}</strong></td>
+                      <td>
+                        {isAdmin && alloc && editingId === alloc.allocation_id ? (
+                          <select
+                            value={editData.allocated_kick_off}
+                            onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
+                            style={{ width: 80 }}
+                          >
+                            {['09:00', '10:00', '10:30', '11:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <strong>{displayKO}</strong>
+                        )}
+                      </td>
                       <td style={{ fontWeight: 500 }}>{cleanTeamName(f.home_team)}</td>
                       <td style={{ color: 'var(--text-secondary)' }}>{cleanTeamName(f.away_team)}</td>
                       <td>
@@ -277,6 +309,25 @@ export default function AllocationGrid({ isAdmin = false }) {
                         )}
                       </td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format || '—'}</td>
+                      {isAdmin && (
+                        <td>
+                          {alloc ? (
+                            editingId === alloc.allocation_id ? (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-sm btn-success" onClick={() => handleSaveEdit(alloc.allocation_id)}>Save</button>
+                                <button className="btn btn-sm btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-sm btn-outline" onClick={() => handleEdit(alloc)}>✏️</button>
+                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(alloc.allocation_id)} style={{ color: 'var(--red)' }}>🗑</button>
+                              </div>
+                            )
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Not allocated</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
