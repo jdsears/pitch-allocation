@@ -544,28 +544,50 @@ async function getMultiWeekOverview(startDate, numWeeks = 4) {
     const totalGames = weekAllocations.length;
     const refsAssigned = weekAllocations.filter(a => a.referee_name).length;
 
+    const allocationRows = weekAllocations.map(row => ({
+      allocation_id: row.allocation_id,
+      kick_off: row.allocated_kick_off,
+      match_date: toDateString(row.match_date),
+      home_team: row.home_team,
+      away_team: row.away_team,
+      age_group: row.age_group,
+      format: row.format,
+      gender: row.gender,
+      venue_name: row.venue_name,
+      pitch_name: row.pitch_name,
+      referee: row.referee_name,
+      camera: row.camera,
+      status: row.status,
+    }));
+
+    const unallocatedRows = weekUnallocated.map(row => ({
+      allocation_id: null,
+      kick_off: row.kick_off,
+      match_date: toDateString(row.match_date),
+      home_team: row.home_team,
+      away_team: row.away_team,
+      age_group: row.age_group,
+      format: row.format,
+      gender: row.gender,
+      venue_name: null,
+      pitch_name: null,
+      referee: null,
+      camera: null,
+      status: 'unallocated',
+    }));
+
+    const combined = [...allocationRows, ...unallocatedRows].sort((a, b) =>
+      (a.match_date || '').localeCompare(b.match_date || '') || (a.kick_off || '').localeCompare(b.kick_off || '')
+    );
+
     weeks.push({
       weekStart: ws,
       weekEnd: we,
-      allocations: weekAllocations.map(row => ({
-        allocation_id: row.allocation_id,
-        kick_off: row.allocated_kick_off,
-        match_date: toDateString(row.match_date),
-        home_team: row.home_team,
-        away_team: row.away_team,
-        age_group: row.age_group,
-        format: row.format,
-        gender: row.gender,
-        venue_name: row.venue_name,
-        pitch_name: row.pitch_name,
-        referee: row.referee_name,
-        camera: row.camera,
-        status: row.status,
-      })),
+      allocations: combined,
       unallocated: weekUnallocated.length,
-      totalGames,
+      totalGames: totalGames + weekUnallocated.length,
       refsAssigned,
-      refsNeeded: totalGames - refsAssigned,
+      refsNeeded: totalGames + weekUnallocated.length - refsAssigned,
     });
   }
 

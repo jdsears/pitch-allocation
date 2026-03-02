@@ -241,7 +241,7 @@ export default function OverviewGrid() {
                       const isNewDate = a.match_date !== prevDate;
 
                       return (
-                        <tr key={a.allocation_id}>
+                        <tr key={a.allocation_id || `unalloc-${i}`}>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {isNewDate && (
                               <span className={`badge ${dayName === 'Saturday' ? 'badge-amber' : 'badge-blue'}`}>
@@ -250,9 +250,9 @@ export default function OverviewGrid() {
                             )}
                           </td>
                           <td><strong>{a.kick_off?.substring(0, 5)}</strong></td>
-                          <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                            {a.venue_name}
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.pitch_name}</div>
+                          <td style={{ fontSize: 12, color: a.venue_name ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                            {a.venue_name || 'No pitch'}
+                            {a.pitch_name && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.pitch_name}</div>}
                           </td>
                           <td>
                             <div style={{ fontWeight: 500 }}>{cleanTeamName(a.home_team)}</div>
@@ -274,7 +274,7 @@ export default function OverviewGrid() {
                             )}
                           </td>
                           <td>
-                            <span className={`badge ${a.status === 'confirmed' ? 'badge-green' : 'badge-amber'}`}>
+                            <span className={`badge ${a.status === 'confirmed' ? 'badge-green' : a.status === 'unallocated' ? 'badge-red' : 'badge-amber'}`}>
                               {a.status}
                             </span>
                           </td>
