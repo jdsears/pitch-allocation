@@ -7,6 +7,7 @@ import {
   publishAllocations,
   getAllocationSummary,
   updateAllocation,
+  updateFixture,
   deleteAllocation,
   getReferees,
   claimMatch,
@@ -29,6 +30,8 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [conflicts, setConflicts] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [editingFixtureId, setEditingFixtureId] = useState(null);
+  const [editFixtureData, setEditFixtureData] = useState({});
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -111,6 +114,47 @@ export default function AllocationGrid({ isAdmin = false }) {
     } catch (err) {
       showToast('Update failed', 'error');
     }
+  };
+
+  const handleEditFixture = (fixture) => {
+    setEditingFixtureId(fixture.id);
+    setEditFixtureData({
+      format: fixture.format || '',
+      age_group: fixture.age_group || '',
+      gender: fixture.gender || 'boys',
+    });
+    // Also set up allocation edit if there's a matching allocation
+    const alloc = allocationLookup[`${fixture.home_team}||${fixture.away_team}`];
+    if (alloc) {
+      setEditingId(alloc.allocation_id);
+      setEditData({
+        allocated_kick_off: alloc.kick_off?.substring(0, 5),
+        camera: alloc.camera || '',
+        notes: alloc.notes || '',
+      });
+    }
+  };
+
+  const handleSaveFixtureEdit = async (fixtureId) => {
+    try {
+      // Save fixture-level changes (format, age_group, gender)
+      await updateFixture(fixtureId, editFixtureData);
+      // Also save allocation changes if editing an allocation
+      if (editingId) {
+        await updateAllocation(editingId, editData);
+      }
+      setEditingFixtureId(null);
+      setEditingId(null);
+      showToast('Updated');
+      loadGrid();
+    } catch (err) {
+      showToast('Update failed', 'error');
+    }
+  };
+
+  const handleCancelFixtureEdit = () => {
+    setEditingFixtureId(null);
+    setEditingId(null);
   };
 
   const handleDelete = async (id) => {
@@ -286,7 +330,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                         </span>
                       </td>
                       <td>
-                        {isAdmin && alloc && editingId === alloc.allocation_id ? (
+                        {isAdmin && editingFixtureId === f.id && alloc ? (
                           <select
                             value={editData.allocated_kick_off}
                             onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
@@ -308,23 +352,35 @@ export default function AllocationGrid({ isAdmin = false }) {
                           <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
                         )}
                       </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format || '—'}</td>
+                      <td>
+                        {isAdmin && editingFixtureId === f.id ? (
+                          <select
+                            value={editFixtureData.format}
+                            onChange={(e) => setEditFixtureData({ ...editFixtureData, format: e.target.value })}
+                            style={{ width: 80, fontSize: 12 }}
+                          >
+                            {['5v5', '7v7', '9v9', '11v11'].map((fmt) => (
+                              <option key={fmt} value={fmt}>{fmt}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format || '—'}</span>
+                        )}
+                      </td>
                       {isAdmin && (
                         <td>
-                          {alloc ? (
-                            editingId === alloc.allocation_id ? (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="btn btn-sm btn-success" onClick={() => handleSaveEdit(alloc.allocation_id)}>Save</button>
-                                <button className="btn btn-sm btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="btn btn-sm btn-outline" onClick={() => handleEdit(alloc)}>✏️</button>
-                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(alloc.allocation_id)} style={{ color: 'var(--red)' }}>🗑</button>
-                              </div>
-                            )
+                          {editingFixtureId === f.id ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm btn-success" onClick={() => handleSaveFixtureEdit(f.id)}>Save</button>
+                              <button className="btn btn-sm btn-outline" onClick={handleCancelFixtureEdit}>Cancel</button>
+                            </div>
                           ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Not allocated</span>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm btn-outline" onClick={() => handleEditFixture(f)}>✏️</button>
+                              {alloc && (
+                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(alloc.allocation_id)} style={{ color: 'var(--red)' }}>🗑</button>
+                              )}
+                            </div>
                           )}
                         </td>
                       )}

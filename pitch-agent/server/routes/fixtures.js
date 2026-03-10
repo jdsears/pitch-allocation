@@ -47,6 +47,41 @@ router.get('/teams', async (req, res) => {
   }
 });
 
+// PUT /api/fixtures/:id - update fixture fields (format, age_group, kick_off, etc)
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { format, age_group, gender, kick_off } = req.body;
+
+    const fields = [];
+    const params = [];
+    let idx = 1;
+
+    if (format !== undefined) { fields.push(`format = $${idx++}`); params.push(format); }
+    if (age_group !== undefined) { fields.push(`age_group = $${idx++}`); params.push(age_group); }
+    if (gender !== undefined) { fields.push(`gender = $${idx++}`); params.push(gender); }
+    if (kick_off !== undefined) { fields.push(`kick_off = $${idx++}`); params.push(kick_off); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    const result = await pool.query(
+      `UPDATE fixtures SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Fixture not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
   try {
