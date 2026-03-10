@@ -150,10 +150,35 @@ export default function AdminPanel() {
     }
   };
 
-  const handleRequestAction = async (id, status) => {
+  const [approvingId, setApprovingId] = useState(null);
+  const [approveFixture, setApproveFixture] = useState({});
+
+  const startApprove = (req) => {
+    setApprovingId(req.id);
+    setApproveFixture({
+      match_date: req.match_date ? req.match_date.substring(0, 10) : '',
+      kick_off: req.kick_off ? req.kick_off.substring(0, 5) : '',
+      home_team: '',
+      away_team: 'Friendly',
+      age_group: 'U9',
+      gender: 'boys',
+      match_type: req.request_type === 'friendly' ? 'Friendly' : 'League / Cup',
+    });
+  };
+
+  const handleRequestAction = async (id, status, fixtureData) => {
     try {
-      await updateRequest(id, { status });
-      showToast(`Request ${status}`);
+      const payload = { status };
+      if (status === 'approved' && fixtureData) {
+        payload.fixture = fixtureData;
+      }
+      const res = await updateRequest(id, payload);
+      if (res.data?.created_fixture) {
+        showToast(`Request approved — fixture created`);
+      } else {
+        showToast(`Request ${status}`);
+      }
+      setApprovingId(null);
       loadData();
     } catch (err) {
       showToast('Update failed', 'error');
@@ -567,22 +592,104 @@ export default function AdminPanel() {
               </thead>
               <tbody>
                 {requests.map(req => (
-                  <tr key={req.id}>
-                    <td>{req.requested_by}</td>
-                    <td><span className="badge badge-amber">{req.request_type}</span></td>
-                    <td>{req.details}</td>
-                    <td>{req.match_date}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-success" onClick={() => handleRequestAction(req.id, 'approved')}>
-                          Approve
-                        </button>
-                        <button className="btn btn-sm btn-outline" onClick={() => handleRequestAction(req.id, 'rejected')}>
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={req.id}>
+                    <tr>
+                      <td>{req.requested_by}</td>
+                      <td><span className="badge badge-amber">{req.request_type}</span></td>
+                      <td>{req.details}</td>
+                      <td>{req.match_date ? req.match_date.substring(0, 10) : '—'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {req.request_type === 'friendly' ? (
+                            <button className="btn btn-sm btn-success" onClick={() => startApprove(req)}>
+                              Approve
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-success" onClick={() => handleRequestAction(req.id, 'approved')}>
+                              Approve
+                            </button>
+                          )}
+                          <button className="btn btn-sm btn-outline" onClick={() => handleRequestAction(req.id, 'rejected')}>
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {approvingId === req.id && (
+                      <tr>
+                        <td colSpan={5}>
+                          <div style={{ background: 'var(--bg-input)', padding: 12, borderRadius: 8, marginTop: 4 }}>
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                              Fill in the fixture details to create it:
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                              <input
+                                type="date"
+                                value={approveFixture.match_date}
+                                onChange={e => setApproveFixture({ ...approveFixture, match_date: e.target.value })}
+                                style={{ fontSize: 12 }}
+                              />
+                              <input
+                                type="time"
+                                value={approveFixture.kick_off}
+                                onChange={e => setApproveFixture({ ...approveFixture, kick_off: e.target.value })}
+                                style={{ fontSize: 12 }}
+                              />
+                              <input
+                                value={approveFixture.home_team}
+                                onChange={e => setApproveFixture({ ...approveFixture, home_team: e.target.value })}
+                                placeholder="Home team (e.g. Morley YFC U9 Bluebirds)"
+                                style={{ fontSize: 12 }}
+                              />
+                              <input
+                                value={approveFixture.away_team}
+                                onChange={e => setApproveFixture({ ...approveFixture, away_team: e.target.value })}
+                                placeholder="Away team"
+                                style={{ fontSize: 12 }}
+                              />
+                              <select
+                                value={approveFixture.age_group}
+                                onChange={e => setApproveFixture({ ...approveFixture, age_group: e.target.value })}
+                                style={{ fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
+                              >
+                                {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+                                  <option key={ag} value={ag}>{ag}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={approveFixture.gender}
+                                onChange={e => setApproveFixture({ ...approveFixture, gender: e.target.value })}
+                                style={{ fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
+                              >
+                                <option value="boys">Boys</option>
+                                <option value="girls">Girls</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr', gap: 8, fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                              <span>Date</span>
+                              <span>Kick-off</span>
+                              <span>Home Team</span>
+                              <span>Away Team</span>
+                              <span>Age</span>
+                              <span>Gender</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                className="btn btn-sm btn-success"
+                                disabled={!approveFixture.match_date || !approveFixture.home_team || !approveFixture.away_team}
+                                onClick={() => handleRequestAction(req.id, 'approved', approveFixture)}
+                              >
+                                Confirm & Create Fixture
+                              </button>
+                              <button className="btn btn-sm btn-outline" onClick={() => setApprovingId(null)}>
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
