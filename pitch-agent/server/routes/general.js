@@ -75,7 +75,8 @@ router.put('/requests/:id', async (req, res) => {
       const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
       const gender = fixture.gender || 'boys';
       const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
-      const format = formatMap[fixture.age_group] || fixture.pitch_format || '11v11';
+      // Allow explicit format override (e.g. teams booking friendlies for next season's format)
+      const format = fixture.format_override || formatMap[fixture.age_group] || fixture.pitch_format || '11v11';
 
       const fixtureResult = await pool.query(
         `INSERT INTO fixtures (match_date, kick_off, home_team, away_team, match_type, is_home_game, gender, age_group, format)
