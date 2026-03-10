@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import AllocationGrid from './components/AllocationGrid';
 import OverviewGrid from './components/OverviewGrid';
 import AdminPanel from './components/AdminPanel';
+import CalendarView from './components/CalendarView';
 import RefClaimPage from './pages/RefClaimPage';
 import RequestForm from './components/RequestForm';
 
@@ -75,6 +76,12 @@ function Dashboard() {
             Weekly
           </button>
           <button
+            className={activeTab === 'calendar' ? 'active' : ''}
+            onClick={() => setActiveTab('calendar')}
+          >
+            Calendar
+          </button>
+          <button
             className={activeTab === 'admin' ? 'active' : ''}
             onClick={() => setActiveTab('admin')}
           >
@@ -85,6 +92,7 @@ function Dashboard() {
 
       {activeTab === 'overview' && <OverviewGrid />}
       {activeTab === 'grid' && <AllocationGrid isAdmin={true} />}
+      {activeTab === 'calendar' && <CalendarView />}
       {activeTab === 'admin' && <AdminPanel />}
     </div>
   );

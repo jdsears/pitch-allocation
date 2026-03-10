@@ -142,4 +142,79 @@ router.post('/overview-message', async (req, res) => {
   }
 });
 
+// GET /api/allocations/calendar?weeks=4 - calendar data for Sat/Sun across N weeks
+router.get('/calendar', async (req, res) => {
+  try {
+    const { startOfWeek: startOfWeekFn, addDays, format: fmtDate } = require('date-fns');
+    const weeks = parseInt(req.query.weeks) || 4;
+    const weekStart = req.query.week || fmtDate(startOfWeekFn(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const calendarEnd = fmtDate(addDays(new Date(weekStart), weeks * 7 - 1), 'yyyy-MM-dd');
+
+    // All allocations in range
+    const allocResult = await pool.query(
+      `SELECT
+         a.id as allocation_id, a.allocated_kick_off, a.status, a.camera, a.notes,
+         f.match_date, f.home_team, f.away_team, f.age_group, f.format, f.gender, f.kick_off as fixture_kick_off,
+         p.name as pitch_name, p.format as pitch_format,
+         v.name as venue_name,
+         r.name as referee_name
+       FROM allocations a
+       JOIN fixtures f ON f.id = a.fixture_id
+       JOIN pitches p ON p.id = a.pitch_id
+       JOIN venues v ON v.id = p.venue_id
+       LEFT JOIN referee_claims rc ON rc.allocation_id = a.id
+       LEFT JOIN referees r ON r.id = rc.referee_id
+       WHERE f.match_date BETWEEN $1 AND $2
+       ORDER BY v.name, p.format, f.match_date, a.allocated_kick_off`,
+      [weekStart, calendarEnd]
+    );
+
+    // Unallocated home fixtures
+    const unallocResult = await pool.query(
+      `SELECT f.* FROM fixtures f
+       LEFT JOIN allocations a ON a.fixture_id = f.id
+       WHERE f.is_home_game = true
+       AND f.match_date BETWEEN $1 AND $2
+       AND a.id IS NULL
+       ORDER BY f.match_date, f.kick_off`,
+      [weekStart, calendarEnd]
+    );
+
+    // Build list of Sat/Sun dates in range
+    const dates = [];
+    const start = new Date(weekStart);
+    for (let i = 0; i < weeks * 7; i++) {
+      const d = addDays(start, i);
+      const day = d.getDay();
+      if (day === 0 || day === 6) {
+        dates.push(fmtDate(d, 'yyyy-MM-dd'));
+      }
+    }
+
+    // Helper to normalise date
+    function toDS(val) {
+      if (!val) return null;
+      if (val instanceof Date) {
+        const y = val.getFullYear();
+        const m = String(val.getMonth() + 1).padStart(2, '0');
+        const d = String(val.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      const s = String(val);
+      const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return match ? match[0] : null;
+    }
+
+    res.json({
+      weekStart,
+      calendarEnd,
+      dates,
+      allocations: allocResult.rows.map(r => ({ ...r, match_date: toDS(r.match_date) })),
+      unallocated: unallocResult.rows.map(r => ({ ...r, match_date: toDS(r.match_date) })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

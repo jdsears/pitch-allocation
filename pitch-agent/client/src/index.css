@@ -462,6 +462,118 @@ input:focus, select:focus {
   font-size: 15px;
 }
 
+/* Calendar view */
+.calendar-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.calendar-table th {
+  background: var(--bg-input);
+  padding: 8px 6px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.calendar-pitch-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--bg-card) !important;
+  min-width: 90px;
+  max-width: 120px;
+  text-align: left !important;
+  padding: 8px !important;
+  border-right: 1px solid var(--border);
+}
+
+.calendar-date-col {
+  min-width: 110px;
+}
+
+.calendar-cell {
+  padding: 4px !important;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  min-width: 110px;
+}
+
+.calendar-fixture {
+  background: var(--bg-input);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-left: 3px solid var(--accent);
+  transition: background 0.15s;
+}
+
+.calendar-fixture:last-child {
+  margin-bottom: 0;
+}
+
+.calendar-fixture:hover {
+  background: var(--bg-card-hover);
+}
+
+.calendar-fixture.confirmed {
+  border-left-color: var(--green);
+}
+
+.calendar-fixture.unallocated {
+  border-left-color: var(--amber);
+  background: var(--amber-bg);
+}
+
+.calendar-fixture-time {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.calendar-fixture-teams {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-fixture-vs {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.calendar-fixture-meta {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .landscape-hint { display: block !important; }
+  .calendar-table { min-width: 600px; }
+  .calendar-pitch-col { min-width: 70px; max-width: 90px; font-size: 10px; }
+  .calendar-date-col { min-width: 95px; }
+  .calendar-cell { min-width: 95px; }
+}
+
 /* Print styles for generating hard copy */
 @media print {
   body { background: white; color: black; }

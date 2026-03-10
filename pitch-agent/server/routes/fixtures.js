@@ -33,6 +33,20 @@ const upload = multer({
   },
 });
 
+// GET /api/fixtures/teams - distinct home team names for filter dropdown
+router.get('/teams', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT home_team FROM fixtures
+       WHERE is_home_game = true
+       ORDER BY home_team`
+    );
+    res.json(result.rows.map(r => r.home_team));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
   try {

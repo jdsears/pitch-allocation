@@ -45,4 +45,10 @@ export const getRequests = (status) => api.get('/requests', { params: { status }
 export const submitRequest = (data) => api.post('/requests', data);
 export const updateRequest = (id, data) => api.put(`/requests/${id}`, data);
 
+// Calendar
+export const getCalendar = (week, weeks = 4) => api.get('/allocations/calendar', { params: { week, weeks } });
+
+// Teams
+export const getTeams = () => api.get('/fixtures/teams');
+
 export default api;
