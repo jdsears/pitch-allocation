@@ -34,6 +34,7 @@ export default function PublicCalendarPage() {
   const [searchParams] = useSearchParams();
   const teamParam = searchParams.get('team') || '';
   const weekParam = searchParams.get('week');
+  const viewParam = searchParams.get('view');
 
   const [calendar, setCalendar] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -43,6 +44,7 @@ export default function PublicCalendarPage() {
     return fmtDate(getMonday(new Date()));
   });
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState(viewParam === 'list' ? 'list' : 'calendar');
 
   useEffect(() => {
     loadData();
@@ -72,9 +74,9 @@ export default function PublicCalendarPage() {
 
   const goToThisWeek = () => setWeekStart(fmtDate(getMonday(new Date())));
 
-  // Build the display data
-  const { fixtures, dates } = useMemo(() => {
-    if (!calendar) return { fixtures: [], dates: [] };
+  // Build display data
+  const { fixtures, dates, venueGrids } = useMemo(() => {
+    if (!calendar) return { fixtures: [], dates: [], venueGrids: {} };
 
     const dates = calendar.dates || [];
 
@@ -94,13 +96,33 @@ export default function PublicCalendarPage() {
       ? all.filter(a => a.home_team === teamFilter || a.away_team === teamFilter)
       : all;
 
-    // Sort by date then kick-off
-    filtered.sort((a, b) =>
+    // Sort for list view
+    const sorted = [...filtered].sort((a, b) =>
       (a.match_date || '').localeCompare(b.match_date || '') ||
       (a.allocated_kick_off || '').localeCompare(b.allocated_kick_off || '')
     );
 
-    return { fixtures: filtered, dates };
+    // Group by venue → pitch → date for calendar view
+    const venueGrids = {};
+    for (const item of filtered) {
+      if (!item.allocated) {
+        const venue = 'Unallocated';
+        const pitch = 'Needs Pitch';
+        if (!venueGrids[venue]) venueGrids[venue] = {};
+        if (!venueGrids[venue][pitch]) venueGrids[venue][pitch] = {};
+        if (!venueGrids[venue][pitch][item.match_date]) venueGrids[venue][pitch][item.match_date] = [];
+        venueGrids[venue][pitch][item.match_date].push(item);
+        continue;
+      }
+      const venue = item.venue_name || 'Unknown';
+      const pitch = `${item.pitch_name} (${item.pitch_format || item.format})`;
+      if (!venueGrids[venue]) venueGrids[venue] = {};
+      if (!venueGrids[venue][pitch]) venueGrids[venue][pitch] = {};
+      if (!venueGrids[venue][pitch][item.match_date]) venueGrids[venue][pitch][item.match_date] = [];
+      venueGrids[venue][pitch][item.match_date].push(item);
+    }
+
+    return { fixtures: sorted, dates, venueGrids };
   }, [calendar, teamFilter]);
 
   // Group fixtures by date for list view
@@ -114,9 +136,12 @@ export default function PublicCalendarPage() {
   }, [fixtures]);
 
   const selectedTeamClean = teamFilter ? cleanTeamName(teamFilter) : '';
+  const venues = Object.keys(venueGrids).filter(v => v !== 'Unallocated');
+  const hasUnallocated = !!venueGrids['Unallocated'];
+  const displayVenues = [...venues, ...(hasUnallocated ? ['Unallocated'] : [])];
 
   return (
-    <div className="app" style={{ maxWidth: 700 }}>
+    <div className="app" style={{ maxWidth: viewMode === 'calendar' ? 1200 : 700 }}>
       <header style={{ textAlign: 'center', padding: '20px 0', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, marginBottom: 4 }}>
           &#9917; Morley YFC Fixtures
@@ -131,21 +156,37 @@ export default function PublicCalendarPage() {
         </p>
       </header>
 
-      {/* Team selector */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, fontWeight: 500 }}>
-          Select your team
-        </label>
-        <select
-          value={teamFilter}
-          onChange={e => setTeamFilter(e.target.value)}
-          style={{ width: '100%', fontSize: 14, padding: '10px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: 7 }}
-        >
-          <option value="">All Teams</option>
-          {teams.map(t => (
-            <option key={t} value={t}>{cleanTeamName(t)}</option>
-          ))}
-        </select>
+      {/* Team selector + view toggle */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: '1 1 180px' }}>
+          <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4, fontWeight: 500 }}>
+            Select your team
+          </label>
+          <select
+            value={teamFilter}
+            onChange={e => setTeamFilter(e.target.value)}
+            style={{ width: '100%', fontSize: 14, padding: '10px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: 7 }}
+          >
+            <option value="">All Teams</option>
+            {teams.map(t => (
+              <option key={t} value={t}>{cleanTeamName(t)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="nav" style={{ flexShrink: 0 }}>
+          <button
+            className={viewMode === 'calendar' ? 'active' : ''}
+            onClick={() => setViewMode('calendar')}
+          >
+            Calendar
+          </button>
+          <button
+            className={viewMode === 'list' ? 'active' : ''}
+            onClick={() => setViewMode('list')}
+          >
+            List
+          </button>
+        </div>
       </div>
 
       {/* Week nav */}
@@ -170,7 +211,90 @@ export default function PublicCalendarPage() {
           <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.5 }}>&#128197;</div>
           <p>{teamFilter ? `No upcoming fixtures for ${selectedTeamClean}` : 'No fixtures in this period'}</p>
         </div>
+      ) : viewMode === 'calendar' ? (
+        /* ===== CALENDAR GRID VIEW ===== */
+        <>
+          <p className="landscape-hint" style={{
+            display: 'none',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            marginBottom: 12,
+          }}>
+            Rotate your phone to landscape for the best view
+          </p>
+
+          {displayVenues.map(venue => (
+            <div key={venue} className="card" style={{ marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="card-header" style={{ position: 'sticky', left: 0 }}>
+                <h2 style={{ color: venue === 'Unallocated' ? 'var(--amber)' : 'var(--text-primary)' }}>
+                  {venue}
+                </h2>
+              </div>
+
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                <table className="calendar-table">
+                  <thead>
+                    <tr>
+                      <th className="calendar-pitch-col">Pitch</th>
+                      {dates.map(d => (
+                        <th key={d} className="calendar-date-col">
+                          <div>{fmtShortDate(d)}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(venueGrids[venue] || {}).map(([pitch, pitchDates]) => (
+                      <tr key={pitch}>
+                        <td className="calendar-pitch-col">
+                          <strong style={{ fontSize: 12 }}>{pitch}</strong>
+                        </td>
+                        {dates.map(d => {
+                          const items = pitchDates[d] || [];
+                          return (
+                            <td key={d} className="calendar-cell">
+                              {items.map((item, i) => (
+                                <div key={i} className={`calendar-fixture ${item.status === 'confirmed' ? 'confirmed' : item.status === 'unallocated' ? 'unallocated' : 'draft'}`}>
+                                  <div className="calendar-fixture-time">
+                                    {fmtTime(item.allocated_kick_off)}
+                                  </div>
+                                  <div className="calendar-fixture-teams">
+                                    {cleanTeamName(item.home_team)}
+                                  </div>
+                                  <div className="calendar-fixture-vs">
+                                    vs {cleanTeamName(item.away_team)}
+                                  </div>
+                                  <div className="calendar-fixture-meta">
+                                    <span className={`badge ${item.gender === 'girls' ? 'badge-amber' : 'badge-blue'}`} style={{ fontSize: 9, padding: '1px 5px' }}>
+                                      {item.age_group}
+                                    </span>
+                                    {item.referee_name && (
+                                      <span style={{ fontSize: 9, color: 'var(--green)' }}>{item.referee_name}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    {Object.keys(venueGrids[venue] || {}).length === 0 && (
+                      <tr>
+                        <td colSpan={dates.length + 1} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+                          No fixtures at this venue
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </>
       ) : (
+        /* ===== LIST VIEW ===== */
         Object.entries(fixturesByDate).map(([date, dayFixtures]) => (
           <div key={date} className="card" style={{ marginBottom: 12 }}>
             <div style={{
