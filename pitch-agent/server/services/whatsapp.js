@@ -112,9 +112,9 @@ function formatWeeklySummary(summary, gridUrl, gridData) {
   }
 
   if (gridUrl) {
-    msg += `\n📋 Full allocation + ref sign-up:\n${gridUrl}`;
-    const calendarUrl = gridUrl.replace('/grid?', '/calendar?').replace(/week=/, 'week=');
-    msg += `\n\n📅 Calendar view (share with managers):\n${calendarUrl}`;
+    const baseUrl = gridUrl.replace(/\/grid.*$/, '');
+    msg += `\n📋 Ref sign-up: ${gridUrl}`;
+    msg += `\n📅 Fixtures & calendar: ${baseUrl}/calendar`;
   }
 
   return msg;
@@ -219,8 +219,8 @@ function formatOverviewMessage(overviewData, baseUrl) {
   msg += `\n━━━━━━━━━━━━━━━\n`;
 
   if (baseUrl) {
-    msg += `\n📋 Full allocation + ref sign-up:\n${baseUrl}/grid`;
-    msg += `\n\n📅 Calendar view (share with managers):\n${baseUrl}/calendar`;
+    msg += `\n📋 Ref sign-up: ${baseUrl}/grid`;
+    msg += `\n📅 Fixtures & calendar: ${baseUrl}/calendar`;
   }
 
   return msg;
