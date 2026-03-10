@@ -5,6 +5,7 @@ import OverviewGrid from './components/OverviewGrid';
 import AdminPanel from './components/AdminPanel';
 import CalendarView from './components/CalendarView';
 import RefClaimPage from './pages/RefClaimPage';
+import PublicCalendarPage from './pages/PublicCalendarPage';
 import RequestForm from './components/RequestForm';
 
 class ErrorBoundary extends React.Component {
@@ -41,8 +42,9 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
-          {/* Public ref claim page - shared via WhatsApp link */}
+          {/* Public pages - shared via WhatsApp link */}
           <Route path="/grid" element={<RefClaimPage />} />
+          <Route path="/calendar" element={<PublicCalendarPage />} />
           <Route path="/request" element={<RequestForm />} />
 
           {/* Admin views for Guy */}

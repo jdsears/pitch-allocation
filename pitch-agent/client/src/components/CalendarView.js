@@ -36,6 +36,7 @@ export default function CalendarView() {
   const [weekStart, setWeekStart] = useState(() => fmtDate(getMonday(new Date())));
   const [loading, setLoading] = useState(true);
   const [venueFilter, setVenueFilter] = useState('all');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -172,6 +173,43 @@ export default function CalendarView() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Share link */}
+      <div className="card" style={{ marginBottom: 16, padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+              Share with managers
+            </div>
+            <div style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {`${window.location.origin}/calendar${teamFilter ? `?team=${encodeURIComponent(teamFilter)}` : ''}`}
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              const url = `${window.location.origin}/calendar${teamFilter ? `?team=${encodeURIComponent(teamFilter)}` : ''}`;
+              navigator.clipboard.writeText(url).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+        </div>
+        {teamFilter && (
+          <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 6 }}>
+            This link will open filtered to {cleanTeamName(teamFilter)}
+          </div>
+        )}
       </div>
 
       {loading ? (

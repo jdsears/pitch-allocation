@@ -113,6 +113,8 @@ function formatWeeklySummary(summary, gridUrl, gridData) {
 
   if (gridUrl) {
     msg += `\n📋 Full allocation + ref sign-up:\n${gridUrl}`;
+    const calendarUrl = gridUrl.replace('/grid?', '/calendar?').replace(/week=/, 'week=');
+    msg += `\n\n📅 Calendar view (share with managers):\n${calendarUrl}`;
   }
 
   return msg;
@@ -218,6 +220,7 @@ function formatOverviewMessage(overviewData, baseUrl) {
 
   if (baseUrl) {
     msg += `\n📋 Full allocation + ref sign-up:\n${baseUrl}/grid`;
+    msg += `\n\n📅 Calendar view (share with managers):\n${baseUrl}/calendar`;
   }
 
   return msg;
