@@ -213,15 +213,22 @@ async function allocateFixtures(weekStartDate) {
       }
 
       // Group this day's fixtures by required format (pitch type)
-      // Always recompute format from gender + age_group to avoid stale DB values
+      // Recompute format from gender + age_group UNLESS the user manually overrode it
       const byFormat = {};
       for (const f of dateFixtures) {
-        const reqFormat = computeFormat(f.age_group, f.gender);
-        if (reqFormat !== f.format) {
-          console.log(`Format correction: ${f.home_team} (${f.gender} ${f.age_group}): DB has ${f.format}, using ${reqFormat}`);
-          f.format = reqFormat;
-          // Also fix it in the DB while we're at it
-          client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+        let reqFormat;
+        if (f.format_override && f.format) {
+          // User manually set the format (e.g. changed a friendly to 7v7) — respect it
+          reqFormat = f.format;
+          console.log(`Format override respected: ${f.home_team} (${f.gender} ${f.age_group}): using manual ${reqFormat}`);
+        } else {
+          reqFormat = computeFormat(f.age_group, f.gender);
+          if (reqFormat !== f.format) {
+            console.log(`Format correction: ${f.home_team} (${f.gender} ${f.age_group}): DB has ${f.format}, using ${reqFormat}`);
+            f.format = reqFormat;
+            // Also fix it in the DB while we're at it
+            client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+          }
         }
         if (!byFormat[reqFormat]) byFormat[reqFormat] = [];
         byFormat[reqFormat].push(f);

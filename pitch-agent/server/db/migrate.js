@@ -76,6 +76,11 @@ const migrate = async () => {
       )
     `);
 
+    // Add format_override flag (safe to re-run — IF NOT EXISTS)
+    await client.query(`
+      ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS format_override BOOLEAN DEFAULT false
+    `);
+
     // Allocations - the core output
     await client.query(`
       CREATE TABLE IF NOT EXISTS allocations (
