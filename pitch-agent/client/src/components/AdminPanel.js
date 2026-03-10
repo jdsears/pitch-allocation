@@ -10,6 +10,103 @@ import {
   updateRequest,
 } from '../utils/api';
 
+const selectStyle = {
+  fontSize: 13,
+  background: 'var(--bg-primary)',
+  border: '1px solid var(--border)',
+  color: 'var(--text-primary)',
+  padding: '8px 12px',
+  borderRadius: 7,
+  width: '100%',
+};
+
+function FixtureCard({ row, onChange, onRemove, index, showRemove }) {
+  return (
+    <div style={{
+      background: 'var(--bg-input)',
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 10,
+      border: '1px solid var(--border)',
+    }}>
+      {showRemove && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={onRemove}
+            style={{ padding: '2px 8px', color: 'var(--red)', fontSize: 11 }}
+          >
+            Remove
+          </button>
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Date</label>
+          <input
+            type="date"
+            value={row.match_date}
+            onChange={e => onChange(index, 'match_date', e.target.value)}
+            style={{ width: '100%', fontSize: 13 }}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Kick-off</label>
+          <input
+            type="time"
+            value={row.kick_off}
+            onChange={e => onChange(index, 'kick_off', e.target.value)}
+            style={{ width: '100%', fontSize: 13 }}
+          />
+        </div>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Home Team</label>
+        <input
+          value={row.home_team}
+          onChange={e => onChange(index, 'home_team', e.target.value)}
+          placeholder="e.g. Morley YFC U9 Bluebirds"
+          style={{ width: '100%', fontSize: 13 }}
+        />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Away Team</label>
+        <input
+          value={row.away_team}
+          onChange={e => onChange(index, 'away_team', e.target.value)}
+          placeholder="e.g. Hethersett Athletic"
+          style={{ width: '100%', fontSize: 13 }}
+        />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Age Group</label>
+          <select
+            value={row.age_group}
+            onChange={e => onChange(index, 'age_group', e.target.value)}
+            style={selectStyle}
+          >
+            {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+              <option key={ag} value={ag}>{ag}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Gender</label>
+          <select
+            value={row.gender}
+            onChange={e => onChange(index, 'gender', e.target.value)}
+            style={selectStyle}
+          >
+            <option value="boys">Boys</option>
+            <option value="girls">Girls</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const [referees, setReferees] = useState([]);
   const [venues, setVenues] = useState([]);
@@ -186,17 +283,39 @@ export default function AdminPanel() {
     }
   };
 
+  const validCount = manualRows.filter(r => r.match_date && r.home_team && r.away_team).length;
+
   return (
     <div>
       {/* Section tabs */}
-      <div className="nav" style={{ marginBottom: 20 }}>
+      <div className="nav" style={{ marginBottom: 20, flexWrap: 'wrap' }}>
         {['referees', 'scrape', 'import', 'venues', 'requests'].map(s => (
           <button
             key={s}
             className={activeSection === s ? 'active' : ''}
             onClick={() => setActiveSection(s)}
+            style={{ position: 'relative' }}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
+            {s === 'requests' && requests.length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: 'var(--red)',
+                color: 'white',
+                borderRadius: '50%',
+                width: 18,
+                height: 18,
+                fontSize: 10,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {requests.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -205,59 +324,57 @@ export default function AdminPanel() {
       {activeSection === 'referees' && (
         <div className="card">
           <div className="card-header">
-            <h2>🏁 Referee Pool</h2>
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+            <h2>Referee Pool</h2>
+            <span className="badge badge-blue">
               {referees.filter(r => r.active).length} active
             </span>
           </div>
 
-          <form onSubmit={handleAddRef} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <form onSubmit={handleAddRef} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <input
               placeholder="Name"
               value={newRef.name}
               onChange={e => setNewRef({ ...newRef, name: e.target.value })}
-              style={{ flex: 1 }}
+              style={{ flex: '1 1 120px', minWidth: 0 }}
             />
             <input
               placeholder="Phone (optional)"
               value={newRef.phone}
               onChange={e => setNewRef({ ...newRef, phone: e.target.value })}
-              style={{ flex: 1 }}
+              style={{ flex: '1 1 120px', minWidth: 0 }}
             />
-            <button type="submit" className="btn btn-primary">Add</button>
+            <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>Add</button>
           </form>
 
-          <table className="grid-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {referees.map(ref => (
-                <tr key={ref.id} style={{ opacity: ref.active ? 1 : 0.5 }}>
-                  <td>{ref.name}</td>
-                  <td>{ref.phone || '—'}</td>
-                  <td>
-                    <span className={`badge ${ref.active ? 'badge-green' : 'badge-red'}`}>
-                      {ref.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handleToggleRef(ref)}
-                    >
-                      {ref.active ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {referees.map(ref => (
+            <div
+              key={ref.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 0',
+                borderBottom: '1px solid var(--border)',
+                opacity: ref.active ? 1 : 0.5,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 500, fontSize: 14 }}>{ref.name}</div>
+                {ref.phone && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ref.phone}</div>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className={`badge ${ref.active ? 'badge-green' : 'badge-red'}`}>
+                  {ref.active ? 'Active' : 'Inactive'}
+                </span>
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => handleToggleRef(ref)}
+                >
+                  {ref.active ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -355,35 +472,31 @@ export default function AdminPanel() {
               Take a screenshot of fixtures from FA Full-Time and upload it here. AI will extract the fixture data automatically.
             </p>
 
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleOcrFileChange}
                 style={{ fontSize: 13 }}
               />
-              <select
-                value={ocrGender}
-                onChange={e => setOcrGender(e.target.value)}
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                  padding: '6px 10px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                }}
-              >
-                <option value="boys">Boys</option>
-                <option value="girls">Girls</option>
-              </select>
-              <button
-                className="btn btn-primary"
-                onClick={handleOcrImport}
-                disabled={!ocrFile || ocrLoading}
-              >
-                {ocrLoading ? 'Extracting...' : 'Extract & Import'}
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={ocrGender}
+                  onChange={e => setOcrGender(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="boys">Boys</option>
+                  <option value="girls">Girls</option>
+                </select>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleOcrImport}
+                  disabled={!ocrFile || ocrLoading}
+                  style={{ flexShrink: 0 }}
+                >
+                  {ocrLoading ? 'Extracting...' : 'Extract & Import'}
+                </button>
+              </div>
             </div>
 
             {ocrPreview && (
@@ -397,7 +510,7 @@ export default function AdminPanel() {
             )}
 
             {ocrResult && ocrResult.error && (
-              <div style={{ background: '#fee', color: '#c00', padding: 12, borderRadius: 8, fontSize: 13 }}>
+              <div style={{ background: 'var(--red-bg)', color: 'var(--red)', padding: 12, borderRadius: 8, fontSize: 13 }}>
                 {ocrResult.error}
               </div>
             )}
@@ -405,32 +518,28 @@ export default function AdminPanel() {
             {ocrResult && ocrResult.fixtures && ocrResult.fixtures.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Found {ocrResult.fixtures.length} fixtures, {ocrResult.saved} saved to database:
+                  Found {ocrResult.fixtures.length} fixtures, {ocrResult.saved} saved:
                 </p>
-                <table className="grid-table" style={{ fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>KO</th>
-                      <th>Home</th>
-                      <th>Away</th>
-                      <th>Age</th>
-                      <th>H/A</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ocrResult.fixtures.map((f, i) => (
-                      <tr key={i}>
-                        <td>{f.match_date}</td>
-                        <td>{f.kick_off || '—'}</td>
-                        <td>{f.home_team}</td>
-                        <td>{f.away_team}</td>
-                        <td>{f.age_group || '—'}</td>
-                        <td>{f.is_home_game ? 'H' : 'A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {ocrResult.fixtures.map((f, i) => (
+                  <div key={i} style={{
+                    padding: '8px 12px',
+                    borderBottom: '1px solid var(--border)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 13,
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{f.home_team} vs {f.away_team}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {f.match_date} {f.kick_off ? `at ${f.kick_off}` : ''} {f.age_group ? `· ${f.age_group}` : ''}
+                      </div>
+                    </div>
+                    <span className={`badge ${f.is_home_game ? 'badge-green' : 'badge-blue'}`}>
+                      {f.is_home_game ? 'H' : 'A'}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -439,102 +548,26 @@ export default function AdminPanel() {
           <div className="card">
             <div className="card-header">
               <h2>Add Match Manually</h2>
-              <button className="btn btn-sm btn-outline" onClick={addRow}>+ Add Row</button>
             </div>
 
             {manualRows.map((row, idx) => (
-              <div
+              <FixtureCard
                 key={idx}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr auto',
-                  gap: 8,
-                  alignItems: 'center',
-                  marginBottom: 8,
-                  padding: 10,
-                  background: 'var(--bg-input)',
-                  borderRadius: 8,
-                }}
-              >
-                <input
-                  type="date"
-                  value={row.match_date}
-                  onChange={e => updateRow(idx, 'match_date', e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-                <input
-                  type="time"
-                  value={row.kick_off}
-                  onChange={e => updateRow(idx, 'kick_off', e.target.value)}
-                  placeholder="KO"
-                  style={{ fontSize: 13 }}
-                />
-                <input
-                  type="text"
-                  value={row.home_team}
-                  onChange={e => updateRow(idx, 'home_team', e.target.value)}
-                  placeholder="Home team"
-                  style={{ fontSize: 13 }}
-                />
-                <input
-                  type="text"
-                  value={row.away_team}
-                  onChange={e => updateRow(idx, 'away_team', e.target.value)}
-                  placeholder="Away team"
-                  style={{ fontSize: 13 }}
-                />
-                <select
-                  value={row.age_group}
-                  onChange={e => updateRow(idx, 'age_group', e.target.value)}
-                  style={{ fontSize: 13, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
-                >
-                  {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
-                    <option key={ag} value={ag}>{ag}</option>
-                  ))}
-                </select>
-                <select
-                  value={row.gender}
-                  onChange={e => updateRow(idx, 'gender', e.target.value)}
-                  style={{ fontSize: 13, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
-                >
-                  <option value="boys">Boys</option>
-                  <option value="girls">Girls</option>
-                </select>
-                <button
-                  className="btn btn-sm btn-outline"
-                  onClick={() => removeRow(idx)}
-                  title="Remove row"
-                  style={{ padding: '4px 8px', color: 'var(--red)' }}
-                >
-                  ✕
-                </button>
-              </div>
+                row={row}
+                index={idx}
+                onChange={updateRow}
+                onRemove={() => removeRow(idx)}
+                showRemove={manualRows.length > 1}
+              />
             ))}
 
-            {/* Labels row */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr auto',
-              gap: 8,
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              padding: '0 10px',
-              marginBottom: 12,
-            }}>
-              <span>Date</span>
-              <span>Kick-off</span>
-              <span>Home Team</span>
-              <span>Away Team</span>
-              <span>Age</span>
-              <span>Gender</span>
-              <span></span>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" onClick={handleImport} disabled={manualRows.every(r => !r.match_date && !r.home_team)}>
-                Import {manualRows.filter(r => r.match_date && r.home_team && r.away_team).length} Fixture{manualRows.filter(r => r.match_date && r.home_team && r.away_team).length !== 1 ? 's' : ''}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={handleImport} disabled={validCount === 0} style={{ flex: '1 1 auto' }}>
+                Import {validCount} Fixture{validCount !== 1 ? 's' : ''}
               </button>
-              <button className="btn btn-outline" onClick={addRow}>+ Add Another</button>
+              <button className="btn btn-outline" onClick={addRow} style={{ flexShrink: 0 }}>
+                + Add Another
+              </button>
             </div>
           </div>
         </>
@@ -544,27 +577,23 @@ export default function AdminPanel() {
       {activeSection === 'venues' && (
         <div className="card">
           <div className="card-header">
-            <h2>📍 Venues & Pitches</h2>
+            <h2>Venues & Pitches</h2>
           </div>
           {venues.map(venue => (
-            <div key={venue.id} style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{venue.name}</h3>
-              <table className="grid-table">
-                <thead>
-                  <tr>
-                    <th>Pitch</th>
-                    <th>Format</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {venue.pitches?.map(p => (
-                    <tr key={p.id}>
-                      <td>{p.name}</td>
-                      <td><span className="badge badge-blue">{p.format}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div key={venue.id} style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, color: 'var(--accent)' }}>{venue.name}</h3>
+              {venue.pitches?.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 0',
+                  borderBottom: '1px solid var(--border)',
+                }}>
+                  <span style={{ fontSize: 14 }}>{p.name}</span>
+                  <span className="badge badge-blue">{p.format}</span>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -574,138 +603,172 @@ export default function AdminPanel() {
       {activeSection === 'requests' && (
         <div className="card">
           <div className="card-header">
-            <h2>📋 Pending Requests</h2>
+            <h2>Pending Requests</h2>
+            {requests.length > 0 && (
+              <span className="badge badge-amber">{requests.length} pending</span>
+            )}
           </div>
           {requests.length === 0 ? (
             <div className="empty-state">
-              <p>No pending requests</p>
+              <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.5 }}>&#10003;</div>
+              <p>All caught up — no pending requests</p>
             </div>
           ) : (
-            <table className="grid-table">
-              <thead>
-                <tr>
-                  <th>From</th>
-                  <th>Type</th>
-                  <th>Details</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map(req => (
-                  <React.Fragment key={req.id}>
-                    <tr>
-                      <td>{req.requested_by}</td>
-                      <td><span className="badge badge-amber">{req.request_type}</span></td>
-                      <td>{req.details}</td>
-                      <td>{req.match_date ? req.match_date.substring(0, 10) : '—'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {req.request_type === 'friendly' ? (
-                            <button className="btn btn-sm btn-success" onClick={() => startApprove(req)}>
-                              Approve
-                            </button>
-                          ) : (
-                            <button className="btn btn-sm btn-success" onClick={() => handleRequestAction(req.id, 'approved')}>
-                              Approve
-                            </button>
-                          )}
-                          <button className="btn btn-sm btn-outline" onClick={() => handleRequestAction(req.id, 'rejected')}>
-                            Reject
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {approvingId === req.id && (
-                      <tr>
-                        <td colSpan={5}>
-                          <div style={{ background: 'var(--bg-input)', padding: 12, borderRadius: 8, marginTop: 4 }}>
-                            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                              Fill in the fixture details to create it:
-                            </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                              <input
-                                type="date"
-                                value={approveFixture.match_date}
-                                onChange={e => setApproveFixture({ ...approveFixture, match_date: e.target.value })}
-                                style={{ fontSize: 12 }}
-                              />
-                              <input
-                                type="time"
-                                value={approveFixture.kick_off}
-                                onChange={e => setApproveFixture({ ...approveFixture, kick_off: e.target.value })}
-                                style={{ fontSize: 12 }}
-                              />
-                              <input
-                                value={approveFixture.home_team}
-                                onChange={e => setApproveFixture({ ...approveFixture, home_team: e.target.value })}
-                                placeholder="Home team (e.g. Morley YFC U9 Bluebirds)"
-                                style={{ fontSize: 12 }}
-                              />
-                              <input
-                                value={approveFixture.away_team}
-                                onChange={e => setApproveFixture({ ...approveFixture, away_team: e.target.value })}
-                                placeholder="Away team"
-                                style={{ fontSize: 12 }}
-                              />
-                              <select
-                                value={approveFixture.age_group}
-                                onChange={e => setApproveFixture({ ...approveFixture, age_group: e.target.value })}
-                                style={{ fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
-                              >
-                                {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
-                                  <option key={ag} value={ag}>{ag}</option>
-                                ))}
-                              </select>
-                              <select
-                                value={approveFixture.gender}
-                                onChange={e => setApproveFixture({ ...approveFixture, gender: e.target.value })}
-                                style={{ fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
-                              >
-                                <option value="boys">Boys</option>
-                                <option value="girls">Girls</option>
-                              </select>
-                              <select
-                                value={approveFixture.format_override}
-                                onChange={e => setApproveFixture({ ...approveFixture, format_override: e.target.value })}
-                                style={{ fontSize: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 4px', borderRadius: 6 }}
-                              >
-                                <option value="">Auto</option>
-                                <option value="5v5">5v5</option>
-                                <option value="7v7">7v7</option>
-                                <option value="9v9">9v9</option>
-                                <option value="11v11">11v11</option>
-                              </select>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 2fr 1fr 1fr 1fr', gap: 8, fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                              <span>Date</span>
-                              <span>Kick-off</span>
-                              <span>Home Team</span>
-                              <span>Away Team</span>
-                              <span>Age</span>
-                              <span>Gender</span>
-                              <span>Format</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button
-                                className="btn btn-sm btn-success"
-                                disabled={!approveFixture.match_date || !approveFixture.home_team || !approveFixture.away_team}
-                                onClick={() => handleRequestAction(req.id, 'approved', approveFixture)}
-                              >
-                                Confirm & Create Fixture
-                              </button>
-                              <button className="btn btn-sm btn-outline" onClick={() => setApprovingId(null)}>
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
+            <div>
+              {requests.map(req => (
+                <div key={req.id} style={{
+                  background: 'var(--bg-input)',
+                  borderRadius: 10,
+                  padding: 14,
+                  marginBottom: 10,
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{req.requested_by}</div>
+                      <span className="badge badge-amber" style={{ fontSize: 10 }}>{req.request_type}</span>
+                    </div>
+                    {req.match_date && (
+                      <span className="badge badge-blue" style={{ fontSize: 11, flexShrink: 0 }}>
+                        {req.match_date.substring(0, 10)}
+                      </span>
                     )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.5 }}>
+                    {req.details}
+                  </p>
+                  {req.kick_off && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                      Preferred KO: <strong style={{ color: 'var(--text-primary)' }}>{req.kick_off.substring(0, 5)}</strong>
+                    </div>
+                  )}
+                  {req.pitch_format && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                      Pitch format: <strong style={{ color: 'var(--text-primary)' }}>{req.pitch_format}</strong>
+                    </div>
+                  )}
+
+                  {approvingId === req.id ? (
+                    <div style={{
+                      background: 'var(--bg-primary)',
+                      borderRadius: 8,
+                      padding: 14,
+                      marginTop: 8,
+                      border: '1px solid var(--accent)',
+                    }}>
+                      <p style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 10, fontWeight: 600 }}>
+                        Create fixture from this request:
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Date</label>
+                          <input
+                            type="date"
+                            value={approveFixture.match_date}
+                            onChange={e => setApproveFixture({ ...approveFixture, match_date: e.target.value })}
+                            style={{ width: '100%', fontSize: 13 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Kick-off</label>
+                          <input
+                            type="time"
+                            value={approveFixture.kick_off}
+                            onChange={e => setApproveFixture({ ...approveFixture, kick_off: e.target.value })}
+                            style={{ width: '100%', fontSize: 13 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Home Team</label>
+                        <input
+                          value={approveFixture.home_team}
+                          onChange={e => setApproveFixture({ ...approveFixture, home_team: e.target.value })}
+                          placeholder="e.g. Morley YFC U9 Bluebirds"
+                          style={{ width: '100%', fontSize: 13 }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Away Team</label>
+                        <input
+                          value={approveFixture.away_team}
+                          onChange={e => setApproveFixture({ ...approveFixture, away_team: e.target.value })}
+                          placeholder="e.g. Hethersett Athletic"
+                          style={{ width: '100%', fontSize: 13 }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Age</label>
+                          <select
+                            value={approveFixture.age_group}
+                            onChange={e => setApproveFixture({ ...approveFixture, age_group: e.target.value })}
+                            style={selectStyle}
+                          >
+                            {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+                              <option key={ag} value={ag}>{ag}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Gender</label>
+                          <select
+                            value={approveFixture.gender}
+                            onChange={e => setApproveFixture({ ...approveFixture, gender: e.target.value })}
+                            style={selectStyle}
+                          >
+                            <option value="boys">Boys</option>
+                            <option value="girls">Girls</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, display: 'block' }}>Format</label>
+                          <select
+                            value={approveFixture.format_override}
+                            onChange={e => setApproveFixture({ ...approveFixture, format_override: e.target.value })}
+                            style={selectStyle}
+                          >
+                            <option value="">Auto</option>
+                            <option value="5v5">5v5</option>
+                            <option value="7v7">7v7</option>
+                            <option value="9v9">9v9</option>
+                            <option value="11v11">11v11</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="btn btn-success"
+                          disabled={!approveFixture.match_date || !approveFixture.home_team || !approveFixture.away_team}
+                          onClick={() => handleRequestAction(req.id, 'approved', approveFixture)}
+                          style={{ flex: 1 }}
+                        >
+                          Confirm & Create Fixture
+                        </button>
+                        <button className="btn btn-outline" onClick={() => setApprovingId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {req.request_type === 'friendly' ? (
+                        <button className="btn btn-sm btn-success" onClick={() => startApprove(req)} style={{ flex: 1 }}>
+                          Approve & Create Fixture
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm btn-success" onClick={() => handleRequestAction(req.id, 'approved')} style={{ flex: 1 }}>
+                          Approve
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-outline" onClick={() => handleRequestAction(req.id, 'rejected')} style={{ color: 'var(--red)' }}>
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
