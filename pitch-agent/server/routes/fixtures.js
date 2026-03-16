@@ -193,12 +193,11 @@ router.post('/import', async (req, res) => {
       const format = computeFormat(f.age_group, gender);
       try {
         await pool.query(
-          `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format, format_override)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false)
+          `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
-             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format,
-             format_override = false`,
+             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format`,
           [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, gender, f.age_group, format]
         );
         saved++;
@@ -263,7 +262,7 @@ router.post('/import-image', upload.single('image'), async (req, res) => {
       const fFormat = computeFormat(f.age_group, fGender);
       try {
         await pool.query(
-          `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format, format_override)
+          `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
