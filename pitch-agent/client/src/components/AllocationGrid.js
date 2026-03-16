@@ -9,6 +9,7 @@ import {
   updateAllocation,
   updateFixture,
   deleteAllocation,
+  deleteFixture,
   getReferees,
   claimMatch,
   unclaimMatch,
@@ -162,6 +163,17 @@ export default function AllocationGrid({ isAdmin = false }) {
     try {
       await deleteAllocation(id);
       showToast('Removed');
+      loadGrid();
+    } catch (err) {
+      showToast('Delete failed', 'error');
+    }
+  };
+
+  const handleDeleteFixture = async (fixtureId) => {
+    if (!window.confirm('Delete this fixture and its allocation? This cannot be undone.')) return;
+    try {
+      await deleteFixture(fixtureId);
+      showToast('Fixture deleted');
       loadGrid();
     } catch (err) {
       showToast('Delete failed', 'error');
@@ -377,9 +389,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                           ) : (
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button className="btn btn-sm btn-outline" onClick={() => handleEditFixture(f)}>✏️</button>
-                              {alloc && (
-                                <button className="btn btn-sm btn-outline" onClick={() => handleDelete(alloc.allocation_id)} style={{ color: 'var(--red)' }}>🗑</button>
-                              )}
+                              <button className="btn btn-sm btn-outline" onClick={() => handleDeleteFixture(f.id)} style={{ color: 'var(--red)' }}>🗑</button>
                             </div>
                           )}
                         </td>

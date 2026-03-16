@@ -86,6 +86,26 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/fixtures/:id - delete fixture and cascade to allocations + referee claims
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Cascade: delete referee claims → allocations → fixture
+    await pool.query(
+      `DELETE FROM referee_claims WHERE allocation_id IN (SELECT id FROM allocations WHERE fixture_id = $1)`,
+      [id]
+    );
+    await pool.query('DELETE FROM allocations WHERE fixture_id = $1', [id]);
+    const result = await pool.query('DELETE FROM fixtures WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Fixture not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
   try {

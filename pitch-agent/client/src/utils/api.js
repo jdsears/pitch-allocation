@@ -8,6 +8,7 @@ const api = axios.create({ baseURL: API_BASE });
 export const getFixtures = (params) => api.get('/fixtures', { params });
 export const scrapeFixtures = () => api.post('/fixtures/scrape');
 export const updateFixture = (id, data) => api.put(`/fixtures/${id}`, data);
+export const deleteFixture = (id) => api.delete(`/fixtures/${id}`);
 export const importFixtures = (fixtures) => api.post('/fixtures/import', { fixtures });
 export const importFixtureImage = (file, gender) => {
   const formData = new FormData();
