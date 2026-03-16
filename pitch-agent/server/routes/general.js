@@ -76,15 +76,17 @@ router.put('/requests/:id', async (req, res) => {
       const gender = fixture.gender || 'boys';
       const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
       // Allow explicit format override (e.g. teams booking friendlies for next season's format)
+      const hasOverride = !!fixture.format_override;
       const format = fixture.format_override || formatMap[fixture.age_group] || fixture.pitch_format || '11v11';
 
       const fixtureResult = await pool.query(
-        `INSERT INTO fixtures (match_date, kick_off, home_team, away_team, match_type, is_home_game, gender, age_group, format)
-         VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)
+        `INSERT INTO fixtures (match_date, kick_off, home_team, away_team, match_type, is_home_game, gender, age_group, format, format_override)
+         VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, $9)
          ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
-           kick_off = EXCLUDED.kick_off, gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format
+           kick_off = EXCLUDED.kick_off, gender = EXCLUDED.gender, age_group = EXCLUDED.age_group,
+           format = EXCLUDED.format, format_override = EXCLUDED.format_override
          RETURNING *`,
-        [fixture.match_date, fixture.kick_off || null, fixture.home_team, fixture.away_team, fixture.match_type || 'Friendly', gender, fixture.age_group, format]
+        [fixture.match_date, fixture.kick_off || null, fixture.home_team, fixture.away_team, fixture.match_type || 'Friendly', gender, fixture.age_group, format, hasOverride]
       );
       createdFixture = fixtureResult.rows[0];
     }
