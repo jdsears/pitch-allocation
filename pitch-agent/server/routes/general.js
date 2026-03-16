@@ -60,14 +60,36 @@ router.post('/requests', async (req, res) => {
 });
 
 // PUT /api/requests/:id - update request status
+// When approving with fixture data, also creates a fixture
 router.put('/requests/:id', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, fixture } = req.body;
     const result = await pool.query(
       'UPDATE requests SET status = $1 WHERE id = $2 RETURNING *',
       [status, req.params.id]
     );
-    res.json(result.rows[0]);
+
+    let createdFixture = null;
+    if (status === 'approved' && fixture) {
+      const boysFormatMap = { U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
+      const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
+      const gender = fixture.gender || 'boys';
+      const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
+      // Allow explicit format override (e.g. teams booking friendlies for next season's format)
+      const format = fixture.format_override || formatMap[fixture.age_group] || fixture.pitch_format || '11v11';
+
+      const fixtureResult = await pool.query(
+        `INSERT INTO fixtures (match_date, kick_off, home_team, away_team, match_type, is_home_game, gender, age_group, format)
+         VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)
+         ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
+           kick_off = EXCLUDED.kick_off, gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format
+         RETURNING *`,
+        [fixture.match_date, fixture.kick_off || null, fixture.home_team, fixture.away_team, fixture.match_type || 'Friendly', gender, fixture.age_group, format]
+      );
+      createdFixture = fixtureResult.rows[0];
+    }
+
+    res.json({ ...result.rows[0], created_fixture: createdFixture });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

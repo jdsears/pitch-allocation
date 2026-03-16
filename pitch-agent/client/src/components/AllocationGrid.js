@@ -3,16 +3,18 @@ import { format, startOfWeek, addWeeks, subWeeks, addDays } from 'date-fns';
 import {
   getAllocationGrid,
   generateAllocations,
-  scrapeFixtures,
+  getFixtures,
   publishAllocations,
   getAllocationSummary,
   updateAllocation,
+  updateFixture,
   deleteAllocation,
+  deleteFixture,
   getReferees,
   claimMatch,
   unclaimMatch,
 } from '../utils/api';
-import { cleanTeamName, formatMatchDay } from '../utils/helpers';
+import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 
 export default function AllocationGrid({ isAdmin = false }) {
   const [weekDate, setWeekDate] = useState(
@@ -21,6 +23,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [grid, setGrid] = useState(null);
   const [summary, setSummary] = useState(null);
   const [referees, setReferees] = useState([]);
+  const [fixtures, setFixtures] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [waPreview, setWaPreview] = useState(null);
@@ -28,6 +31,8 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [conflicts, setConflicts] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [editingFixtureId, setEditingFixtureId] = useState(null);
+  const [editFixtureData, setEditFixtureData] = useState({});
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -37,6 +42,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const loadGrid = useCallback(async () => {
     setLoading(true);
     try {
+      const weekEndDate = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
       const [gridRes, summaryRes, refsRes] = await Promise.all([
         getAllocationGrid(weekDate),
         getAllocationSummary(weekDate),
@@ -45,6 +51,14 @@ export default function AllocationGrid({ isAdmin = false }) {
       setGrid(gridRes.data);
       setSummary(summaryRes.data);
       setReferees(refsRes.data);
+      // Fetch fixtures separately so a failure doesn't blank the whole page
+      try {
+        const fixturesRes = await getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' });
+        setFixtures(Array.isArray(fixturesRes.data) ? fixturesRes.data : []);
+      } catch (fixErr) {
+        console.error('Failed to load fixtures:', fixErr);
+        setFixtures([]);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -53,16 +67,8 @@ export default function AllocationGrid({ isAdmin = false }) {
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
-  const handleScrape = async () => {
-    setLoading(true);
-    try {
-      const res = await scrapeFixtures();
-      showToast(`Scraped ${res.data.total} fixtures (${res.data.saved} saved)`);
-      loadGrid();
-    } catch (err) {
-      showToast('Scrape failed — check console', 'error');
-    }
-    setLoading(false);
+  const handleFetchFixtures = async () => {
+    await loadGrid();
   };
 
   const handleGenerate = async () => {
@@ -111,11 +117,63 @@ export default function AllocationGrid({ isAdmin = false }) {
     }
   };
 
+  const handleEditFixture = (fixture) => {
+    setEditingFixtureId(fixture.id);
+    setEditFixtureData({
+      format: fixture.format || '',
+      age_group: fixture.age_group || '',
+      gender: fixture.gender || 'boys',
+    });
+    // Also set up allocation edit if there's a matching allocation
+    const alloc = allocationLookup[`${fixture.home_team}||${fixture.away_team}`];
+    if (alloc) {
+      setEditingId(alloc.allocation_id);
+      setEditData({
+        allocated_kick_off: alloc.kick_off?.substring(0, 5),
+        camera: alloc.camera || '',
+        notes: alloc.notes || '',
+      });
+    }
+  };
+
+  const handleSaveFixtureEdit = async (fixtureId) => {
+    try {
+      // Save fixture-level changes (format, age_group, gender)
+      await updateFixture(fixtureId, editFixtureData);
+      // Also save allocation changes if editing an allocation
+      if (editingId) {
+        await updateAllocation(editingId, editData);
+      }
+      setEditingFixtureId(null);
+      setEditingId(null);
+      showToast('Updated');
+      loadGrid();
+    } catch (err) {
+      showToast('Update failed', 'error');
+    }
+  };
+
+  const handleCancelFixtureEdit = () => {
+    setEditingFixtureId(null);
+    setEditingId(null);
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Remove this allocation?')) return;
     try {
       await deleteAllocation(id);
       showToast('Removed');
+      loadGrid();
+    } catch (err) {
+      showToast('Delete failed', 'error');
+    }
+  };
+
+  const handleDeleteFixture = async (fixtureId) => {
+    if (!window.confirm('Delete this fixture and its allocation? This cannot be undone.')) return;
+    try {
+      await deleteFixture(fixtureId);
+      showToast('Fixture deleted');
       loadGrid();
     } catch (err) {
       showToast('Delete failed', 'error');
@@ -148,6 +206,23 @@ export default function AllocationGrid({ isAdmin = false }) {
   const totalGames = summary?.venues?.reduce((s, v) => s + parseInt(v.total_games), 0) || 0;
   const refsNeeded = summary?.unrefereed?.length || 0;
   const refsClaimed = totalGames - refsNeeded;
+  const fixtureCount = fixtures?.length || 0;
+  const unallocatedCount = fixtureCount - totalGames;
+
+  // Build a lookup from home_team+away_team → allocation data so fixtures table can show allocated KO
+  const allocationLookup = {};
+  if (grid?.grid) {
+    for (const pitches of Object.values(grid.grid)) {
+      for (const dates of Object.values(pitches)) {
+        for (const allocations of Object.values(dates)) {
+          for (const a of allocations) {
+            const key = `${a.home_team}||${a.away_team}`;
+            allocationLookup[key] = a;
+          }
+        }
+      }
+    }
+  }
 
   return (
     <div>
@@ -195,7 +270,7 @@ export default function AllocationGrid({ isAdmin = false }) {
       {/* Admin actions */}
       {isAdmin && (
         <div className="action-bar">
-          <button className="btn btn-outline" onClick={handleScrape} disabled={loading}>
+          <button className="btn btn-outline" onClick={handleFetchFixtures} disabled={loading}>
             {loading ? '⏳' : '🔄'} Fetch Fixtures
           </button>
           <button className="btn btn-primary" onClick={handleGenerate} disabled={loading}>
@@ -228,21 +303,126 @@ export default function AllocationGrid({ isAdmin = false }) {
         </div>
       )}
 
+      {/* Fixtures table - shows imported home fixtures for the week */}
+      {fixtures && !loading && fixtureCount > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h2>Fixtures This Week ({fixtureCount})</h2>
+            {isAdmin && unallocatedCount > 0 && (
+              <span className="badge badge-amber">{unallocatedCount} unallocated</span>
+            )}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="grid-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  <th>KO</th>
+                  <th>Home</th>
+                  <th>Away</th>
+                  <th>Age</th>
+                  <th>Format</th>
+                  {isAdmin && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {fixtures.map((f, i) => {
+                  const parsedFixDate = parseDate(f.match_date);
+                  const dayName = parsedFixDate ? formatMatchDay(f.match_date) : 'TBC';
+                  const dayLabel = parsedFixDate
+                    ? `${dayName} ${format(parsedFixDate, 'd/M')}`
+                    : 'TBC';
+                  const alloc = allocationLookup[`${f.home_team}||${f.away_team}`];
+                  const displayKO = alloc?.kick_off?.substring(0, 5) || f.kick_off?.substring(0, 5) || '—';
+                  return (
+                    <tr key={f.id || i}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${dayName === 'Saturday' ? 'badge-amber' : 'badge-blue'}`}>
+                          {dayLabel}
+                        </span>
+                      </td>
+                      <td>
+                        {isAdmin && editingFixtureId === f.id && alloc ? (
+                          <select
+                            value={editData.allocated_kick_off}
+                            onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
+                            style={{ width: 80 }}
+                          >
+                            {['09:00', '10:00', '10:30', '11:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <strong>{displayKO}</strong>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: 500 }}>{cleanTeamName(f.home_team)}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{cleanTeamName(f.away_team)}</td>
+                      <td>
+                        <span className="badge badge-blue">{f.age_group || '—'}</span>
+                        {f.gender === 'girls' && (
+                          <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
+                        )}
+                      </td>
+                      <td>
+                        {isAdmin && editingFixtureId === f.id ? (
+                          <select
+                            value={editFixtureData.format}
+                            onChange={(e) => setEditFixtureData({ ...editFixtureData, format: e.target.value })}
+                            style={{ width: 80, fontSize: 12 }}
+                          >
+                            {['5v5', '7v7', '9v9', '11v11'].map((fmt) => (
+                              <option key={fmt} value={fmt}>{fmt}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{f.format || '—'}</span>
+                        )}
+                      </td>
+                      {isAdmin && (
+                        <td>
+                          {editingFixtureId === f.id ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm btn-success" onClick={() => handleSaveFixtureEdit(f.id)}>Save</button>
+                              <button className="btn btn-sm btn-outline" onClick={handleCancelFixtureEdit}>Cancel</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm btn-outline" onClick={() => handleEditFixture(f)}>✏️</button>
+                              <button className="btn btn-sm btn-outline" onClick={() => handleDeleteFixture(f.id)} style={{ color: 'var(--red)' }}>🗑</button>
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Loading spinner */}
       {loading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
           <div className="spinner" />
-          <p style={{ marginTop: 12 }}>Loading allocations...</p>
+          <p style={{ marginTop: 12 }}>Loading fixtures...</p>
         </div>
       )}
 
       {/* Allocation grid by venue, grouped by day */}
-      {grid && !loading && (
+      {grid?.grid && !loading && (
         <>
-          {Object.keys(grid.grid).length === 0 ? (
+          {Object.keys(grid.grid).length === 0 && fixtureCount === 0 ? (
             <div className="empty-state">
-              <h3>No allocations for this week</h3>
-              <p>Fetch fixtures from the FA and run auto-allocate to get started.</p>
+              <h3>No fixtures for this week</h3>
+              <p>Import fixtures via the Scrape script or Admin > Import tab.</p>
+            </div>
+          ) : Object.keys(grid.grid).length === 0 && fixtureCount > 0 ? (
+            <div className="empty-state">
+              <h3>Fixtures found — not yet allocated</h3>
+              <p>Click Auto-Allocate to assign pitches and kick-off times.</p>
             </div>
           ) : (
             Object.entries(grid.grid).map(([venue, pitches]) => (
@@ -277,7 +457,8 @@ export default function AllocationGrid({ isAdmin = false }) {
                           <tbody>
                             {dateEntries.map(([date, allocations]) => {
                               const dayName = formatMatchDay(date);
-                              const dayLabel = `${dayName} ${format(new Date(date + 'T12:00:00'), 'd/M')}`;
+                              const parsed = parseDate(date);
+                              const dayLabel = parsed ? `${dayName} ${format(parsed, 'd/M')}` : date;
 
                               return allocations.map((a, idx) => (
                                 <tr key={a.allocation_id}>

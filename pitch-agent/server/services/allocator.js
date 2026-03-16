@@ -1,6 +1,41 @@
 const pool = require('../db/pool');
 const { format, startOfWeek, addDays } = require('date-fns');
 
+// Canonical format mapping — recompute at allocation time so we never
+// trust stale/incorrect format values stored in the fixtures table.
+const AGE_TO_FORMAT = {
+  U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7',
+  U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
+  U16: '11v11', U17: '11v11', U18: '11v11'
+};
+const GIRLS_AGE_TO_FORMAT = {
+  ...AGE_TO_FORMAT, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9'
+};
+function computeFormat(ageGroup, gender) {
+  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
+  return map[ageGroup] || '11v11';
+}
+
+/**
+ * Safely convert a date value (Date object or string) to a YYYY-MM-DD string.
+ * Uses local-time getters to avoid timezone-related off-by-one issues
+ * that occur with format(new Date(...)) or toISOString().
+ * Returns null if the value is missing or invalid.
+ */
+function toDateString(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? match[0] : null;
+}
+
 /**
  * Get the last kick-off time a team was allocated (most recent match)
  */
@@ -12,6 +47,16 @@ async function getLastKickOff(teamName, pitchId) {
     [`%${teamName}%`, pitchId]
   );
   return result.rows[0]?.kick_off || null;
+}
+
+/**
+ * Extract numeric age from age group string (e.g. "U13" → 13, "U9" → 9).
+ * Returns null if the string doesn't match.
+ */
+function ageGroupNumber(ageGroup) {
+  if (!ageGroup) return null;
+  const m = String(ageGroup).match(/U(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
 }
 
 /**
@@ -99,6 +144,21 @@ async function allocateFixtures(weekStartDate) {
 
     console.log(`Allocating fixtures for week: ${weekStart} to ${weekEnd}`);
 
+    // Clear existing DRAFT allocations for this week so we can re-allocate
+    // with current rules. Confirmed allocations are left untouched.
+    const cleared = await client.query(
+      `DELETE FROM allocations
+       WHERE status = 'draft'
+       AND fixture_id IN (
+         SELECT f.id FROM fixtures f
+         WHERE f.match_date BETWEEN $1 AND $2
+       )`,
+      [weekStart, weekEnd]
+    );
+    if (cleared.rowCount > 0) {
+      console.log(`Cleared ${cleared.rowCount} draft allocations for re-allocation`);
+    }
+
     // Get all home fixtures for this week that aren't yet allocated
     const fixtures = await client.query(
       `SELECT f.* FROM fixtures f 
@@ -130,7 +190,8 @@ async function allocateFixtures(weekStartDate) {
     // Group fixtures by date
     const fixturesByDate = {};
     for (const fixture of fixtures.rows) {
-      const date = format(new Date(fixture.match_date), 'yyyy-MM-dd');
+      const date = toDateString(fixture.match_date);
+      if (!date) continue; // skip fixtures with invalid/missing dates
       if (!fixturesByDate[date]) fixturesByDate[date] = [];
       fixturesByDate[date].push(fixture);
     }
@@ -152,37 +213,80 @@ async function allocateFixtures(weekStartDate) {
       }
 
       // Group this day's fixtures by required format (pitch type)
+      // Recompute format from gender + age_group UNLESS the user manually overrode it
       const byFormat = {};
       for (const f of dateFixtures) {
-        if (!byFormat[f.format]) byFormat[f.format] = [];
-        byFormat[f.format].push(f);
+        let reqFormat;
+        if (f.format_override && f.format) {
+          // User manually set the format (e.g. changed a friendly to 7v7) — respect it
+          reqFormat = f.format;
+          console.log(`Format override respected: ${f.home_team} (${f.gender} ${f.age_group}): using manual ${reqFormat}`);
+        } else {
+          reqFormat = computeFormat(f.age_group, f.gender);
+          if (reqFormat !== f.format) {
+            console.log(`Format correction: ${f.home_team} (${f.gender} ${f.age_group}): DB has ${f.format}, using ${reqFormat}`);
+            f.format = reqFormat;
+            // Also fix it in the DB while we're at it
+            client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+          }
+        }
+        if (!byFormat[reqFormat]) byFormat[reqFormat] = [];
+        byFormat[reqFormat].push(f);
       }
 
       // Allocate each format group to matching pitches
       for (const [reqFormat, formatFixtures] of Object.entries(byFormat)) {
-        const matchingPitches = pitches.rows.filter(p => p.format === reqFormat);
+        const allMatchingPitches = pitches.rows.filter(p => p.format === reqFormat);
 
-        if (matchingPitches.length === 0) {
+        if (allMatchingPitches.length === 0) {
           formatFixtures.forEach(f => conflicts.push({ fixture: f, reason: `No pitch for format ${reqFormat}` }));
           continue;
         }
 
-        let remaining = [...formatFixtures];
+        // Helper: check if a fixture's age group fits a pitch's age restrictions
+        const fitsPitch = (fixture, pitch) => {
+          const fixtureAge = ageGroupNumber(fixture.age_group);
+          if (!fixtureAge) return true; // can't determine age, allow
+          if (pitch.max_age_group) {
+            const maxAge = ageGroupNumber(pitch.max_age_group);
+            if (maxAge && fixtureAge > maxAge) return false;
+          }
+          if (pitch.min_age_group) {
+            const minAge = ageGroupNumber(pitch.min_age_group);
+            if (minAge && fixtureAge < minAge) return false;
+          }
+          return true;
+        };
 
-        for (const pitch of matchingPitches) {
+        // Split fixtures: those that exceed restricted pitches go first (to unrestricted only)
+        const needsUnrestricted = [];
+        const fitsRestricted = [];
+        for (const f of formatFixtures) {
+          const hasEligibleRestricted = allMatchingPitches.some(p => p.max_age_group && fitsPitch(f, p));
+          if (hasEligibleRestricted) {
+            fitsRestricted.push(f);
+          } else {
+            needsUnrestricted.push(f);
+          }
+        }
+
+        const unrestrictedPitches = allMatchingPitches.filter(p => !p.max_age_group);
+        const restrictedPitches = allMatchingPitches.filter(p => p.max_age_group);
+
+        // Phase 1: Allocate fixtures that need unrestricted pitches (e.g. U15/U16 → Morley only)
+        let remaining = [...needsUnrestricted];
+
+        for (const pitch of unrestrictedPitches) {
           if (remaining.length === 0) break;
           if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
 
-          // Get available slots for this pitch on this day of week
           const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
-          
           if (daySlots.length === 0) continue;
 
           const { allocated, overflow } = await allocateWithRotation(
             remaining, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
           );
 
-          // Save allocations
           for (const { fixture, kickOff } of allocated) {
             const result = await client.query(
               `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
@@ -203,10 +307,50 @@ async function allocateFixtures(weekStartDate) {
           remaining = overflow;
         }
 
+        // Phase 2: Allocate fixtures that fit restricted pitches (e.g. U13/U14 → Shropham OK)
+        // Try restricted pitches first, then overflow to unrestricted
+        remaining = [...remaining, ...fitsRestricted];
+
+        for (const pitch of [...restrictedPitches, ...unrestrictedPitches]) {
+          if (remaining.length === 0) break;
+          if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
+
+          // Filter remaining to only those that fit this pitch
+          const eligible = remaining.filter(f => fitsPitch(f, pitch));
+          const ineligible = remaining.filter(f => !fitsPitch(f, pitch));
+          if (eligible.length === 0) continue;
+
+          const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
+          if (daySlots.length === 0) continue;
+
+          const { allocated, overflow } = await allocateWithRotation(
+            eligible, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
+          );
+
+          for (const { fixture, kickOff } of allocated) {
+            const result = await client.query(
+              `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
+               VALUES ($1, $2, $3, 'draft', $4) RETURNING id`,
+              [fixture.id, pitch.id, kickOff, weekStart]
+            );
+
+            await client.query(
+              `INSERT INTO allocation_history (team_name, pitch_id, kick_off, match_date)
+               VALUES ($1, $2, $3, $4)`,
+              [fixture.home_team, pitch.id, kickOff, date]
+            );
+
+            occupiedSlots[pitch.id].push(kickOff);
+            allAllocations.push({ id: result.rows[0].id, fixture, pitch, kick_off: kickOff });
+          }
+
+          remaining = [...overflow, ...ineligible];
+        }
+
         // Anything left is a conflict
-        remaining.forEach(f => conflicts.push({ 
-          fixture: f, 
-          reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}` 
+        remaining.forEach(f => conflicts.push({
+          fixture: f,
+          reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}`
         }));
       }
     }
@@ -265,7 +409,8 @@ async function getAllocationGrid(weekStartDate) {
   for (const row of result.rows) {
     const venue = row.venue_name;
     const pitch = row.pitch_name;
-    const date = format(new Date(row.match_date), 'yyyy-MM-dd');
+    const date = toDateString(row.match_date);
+    if (!date) continue; // skip rows with invalid/missing dates
 
     if (!grid[venue]) grid[venue] = {};
     if (!grid[venue][pitch]) grid[venue][pitch] = {};
@@ -337,4 +482,123 @@ async function getWeekSummary(weekStartDate) {
   };
 }
 
-module.exports = { allocateFixtures, getAllocationGrid, getWeekSummary };
+/**
+ * Get a multi-week overview of allocations (rolling N weeks from a start date)
+ */
+async function getMultiWeekOverview(startDate, numWeeks = 4) {
+  const weekStart = startDate || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const overviewEnd = format(addDays(new Date(weekStart), numWeeks * 7 - 1), 'yyyy-MM-dd');
+
+  const result = await pool.query(
+    `SELECT
+       a.id as allocation_id,
+       a.allocated_kick_off,
+       a.status,
+       a.camera,
+       a.notes,
+       a.week_start,
+       f.match_date,
+       f.home_team,
+       f.away_team,
+       f.age_group,
+       f.format,
+       f.gender,
+       f.kick_off as fixture_kick_off,
+       p.name as pitch_name,
+       p.format as pitch_format,
+       v.name as venue_name,
+       r.name as referee_name,
+       rc.referee_id,
+       rc.status as ref_claim_status
+     FROM allocations a
+     JOIN fixtures f ON f.id = a.fixture_id
+     JOIN pitches p ON p.id = a.pitch_id
+     JOIN venues v ON v.id = p.venue_id
+     LEFT JOIN referee_claims rc ON rc.allocation_id = a.id
+     LEFT JOIN referees r ON r.id = rc.referee_id
+     WHERE f.match_date BETWEEN $1 AND $2
+     ORDER BY f.match_date, a.allocated_kick_off, v.name`,
+    [weekStart, overviewEnd]
+  );
+
+  // Also fetch unallocated home fixtures for the same range
+  const unallocated = await pool.query(
+    `SELECT f.* FROM fixtures f
+     LEFT JOIN allocations a ON a.fixture_id = f.id
+     WHERE f.is_home_game = true
+     AND f.match_date BETWEEN $1 AND $2
+     AND a.id IS NULL
+     ORDER BY f.match_date, f.kick_off`,
+    [weekStart, overviewEnd]
+  );
+
+  // Group allocations by week
+  const weeks = [];
+  for (let w = 0; w < numWeeks; w++) {
+    const ws = format(addDays(new Date(weekStart), w * 7), 'yyyy-MM-dd');
+    const we = format(addDays(new Date(weekStart), w * 7 + 6), 'yyyy-MM-dd');
+
+    const weekAllocations = result.rows.filter(r => {
+      const d = toDateString(r.match_date);
+      return d && d >= ws && d <= we;
+    });
+
+    const weekUnallocated = unallocated.rows.filter(r => {
+      const d = toDateString(r.match_date);
+      return d && d >= ws && d <= we;
+    });
+
+    const totalGames = weekAllocations.length;
+    const refsAssigned = weekAllocations.filter(a => a.referee_name).length;
+
+    const allocationRows = weekAllocations.map(row => ({
+      allocation_id: row.allocation_id,
+      kick_off: row.allocated_kick_off,
+      match_date: toDateString(row.match_date),
+      home_team: row.home_team,
+      away_team: row.away_team,
+      age_group: row.age_group,
+      format: row.format,
+      gender: row.gender,
+      venue_name: row.venue_name,
+      pitch_name: row.pitch_name,
+      referee: row.referee_name,
+      camera: row.camera,
+      status: row.status,
+    }));
+
+    const unallocatedRows = weekUnallocated.map(row => ({
+      allocation_id: null,
+      kick_off: row.kick_off,
+      match_date: toDateString(row.match_date),
+      home_team: row.home_team,
+      away_team: row.away_team,
+      age_group: row.age_group,
+      format: row.format,
+      gender: row.gender,
+      venue_name: null,
+      pitch_name: null,
+      referee: null,
+      camera: null,
+      status: 'unallocated',
+    }));
+
+    const combined = [...allocationRows, ...unallocatedRows].sort((a, b) =>
+      (a.match_date || '').localeCompare(b.match_date || '') || (a.kick_off || '').localeCompare(b.kick_off || '')
+    );
+
+    weeks.push({
+      weekStart: ws,
+      weekEnd: we,
+      allocations: combined,
+      unallocated: weekUnallocated.length,
+      totalGames: totalGames + weekUnallocated.length,
+      refsAssigned,
+      refsNeeded: totalGames + weekUnallocated.length - refsAssigned,
+    });
+  }
+
+  return { weekStart, overviewEnd, weeks };
+}
+
+module.exports = { allocateFixtures, getAllocationGrid, getWeekSummary, getMultiWeekOverview };

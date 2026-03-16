@@ -1,21 +1,23 @@
 {
   "phases": {
     "setup": {
+      "nixPkgs": [
+        "nodejs_20"
+      ],
       "aptPkgs": [
         "chromium",
-        "chromium-sandbox",
         "fonts-liberation",
         "libnss3",
         "libatk-bridge2.0-0",
         "libdrm2",
         "libxkbcommon0",
         "libgbm1",
-        "libasound2"
+        "libasound2t64"
       ]
     },
     "install": {
       "cmds": [
-        "npm install",
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install",
         "cd client && npm install"
       ]
     },
@@ -25,5 +27,7 @@
       ]
     }
   },
-  "start": "node server/index.js"
+  "start": {
+    "cmd": "node server/index.js"
+  }
 }
