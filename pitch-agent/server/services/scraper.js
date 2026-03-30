@@ -409,11 +409,34 @@ async function saveFixtures(fixtures) {
   let saved = 0;
   let skipped = 0;
 
+  let rescheduled = 0;
   try {
     for (const f of fixtures) {
       // Always recompute format from gender + age_group as a safety net
       const correctFormat = getFormat(f.age_group, f.gender);
       try {
+        // If the fixture has a league_code, check for a rescheduled match
+        // (same league_code + home_team but different date)
+        if (f.league_code) {
+          const existing = await client.query(
+            `SELECT id, match_date FROM fixtures
+             WHERE league_code = $1 AND home_team = $2 AND match_date != $3`,
+            [f.league_code, f.home_team, f.match_date]
+          );
+          if (existing.rows.length > 0) {
+            console.log(`Rescheduled: ${f.home_team} vs ${f.away_team} moved from ${existing.rows[0].match_date} to ${f.match_date}`);
+            await client.query(
+              `UPDATE fixtures SET match_date = $1, kick_off = $2, venue_name = $3,
+               gender = $4, age_group = $5,
+               format = CASE WHEN format_override = true THEN format ELSE $6 END
+               WHERE id = $7`,
+              [f.match_date, f.kick_off, f.venue_name, f.gender, f.age_group, correctFormat, existing.rows[0].id]
+            );
+            rescheduled++;
+            saved++;
+            continue;
+          }
+        }
         await client.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -423,7 +446,7 @@ async function saveFixtures(fixtures) {
              league_code = EXCLUDED.league_code,
              gender = EXCLUDED.gender,
              age_group = EXCLUDED.age_group,
-             format = EXCLUDED.format`,
+             format = CASE WHEN fixtures.format_override = true THEN fixtures.format ELSE EXCLUDED.format END`,
           [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type, f.is_home_game, f.gender, f.age_group, correctFormat]
         );
         saved++;
@@ -431,12 +454,12 @@ async function saveFixtures(fixtures) {
         skipped++;
       }
     }
-    console.log(`Saved ${saved} fixtures, skipped ${skipped}`);
+    console.log(`Saved ${saved} fixtures (${rescheduled} rescheduled), skipped ${skipped}`);
   } finally {
     client.release();
   }
 
-  return { saved, skipped };
+  return { saved, skipped, rescheduled };
 }
 
 // Main scrape function - runs both boys and girls
