@@ -145,14 +145,16 @@ async function allocateFixtures(weekStartDate) {
     console.log(`Allocating fixtures for week: ${weekStart} to ${weekEnd}`);
 
     // Clear existing DRAFT allocations for this week so we can re-allocate
-    // with current rules. Confirmed allocations are left untouched.
+    // with current rules. Confirmed allocations and drafts with referee
+    // claims are left untouched (refs already committed to those slots).
     const cleared = await client.query(
       `DELETE FROM allocations
        WHERE status = 'draft'
        AND fixture_id IN (
          SELECT f.id FROM fixtures f
          WHERE f.match_date BETWEEN $1 AND $2
-       )`,
+       )
+       AND id NOT IN (SELECT allocation_id FROM referee_claims)`,
       [weekStart, weekEnd]
     );
     if (cleared.rowCount > 0) {
