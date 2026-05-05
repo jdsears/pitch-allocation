@@ -176,13 +176,18 @@ async function allocateFixtures(weekStartDate) {
     }
 
     console.log(`Found ${fixtures.rows.length} home fixtures to allocate`);
+    for (const f of fixtures.rows) {
+      console.log(`  Fixture #${f.id}: ${f.home_team} vs ${f.away_team} (${f.gender} ${f.age_group}, format=${f.format}, date=${toDateString(f.match_date)})`);
+    }
 
     // Get all pitches with venue info
     const pitches = await client.query(
-      `SELECT p.*, v.name as venue_name FROM pitches p 
-       JOIN venues v ON v.id = p.venue_id 
+      `SELECT p.*, v.name as venue_name FROM pitches p
+       JOIN venues v ON v.id = p.venue_id
        ORDER BY v.name, p.format`
     );
+
+    console.log(`Available pitches: ${pitches.rows.map(p => `${p.venue_name} ${p.name} (${p.format})`).join(', ')}`);
 
     const allAllocations = [];
     const conflicts = [];
@@ -237,6 +242,7 @@ async function allocateFixtures(weekStartDate) {
       // Allocate each format group to matching pitches
       for (const [reqFormat, formatFixtures] of Object.entries(byFormat)) {
         const allMatchingPitches = pitches.rows.filter(p => p.format === reqFormat);
+        console.log(`${dayOfWeek} ${date}: ${formatFixtures.length} fixture(s) need ${reqFormat}, ${allMatchingPitches.length} pitch(es) match: ${allMatchingPitches.map(p => `${p.venue_name} ${p.name} (id=${p.id})`).join(', ') || 'NONE'}`);
 
         if (allMatchingPitches.length === 0) {
           formatFixtures.forEach(f => conflicts.push({ fixture: f, reason: `No pitch for format ${reqFormat}` }));
@@ -281,6 +287,7 @@ async function allocateFixtures(weekStartDate) {
           if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
 
           const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
+          console.log(`  Phase 1: ${pitch.venue_name} ${pitch.name} (id=${pitch.id}) — ${dayOfWeek} slots: ${daySlots.length > 0 ? daySlots.join(', ') : 'NONE'}, occupied: ${occupiedSlots[pitch.id].join(', ') || 'none'}`);
           if (daySlots.length === 0) continue;
 
           const { allocated, overflow } = await allocateWithRotation(
@@ -321,6 +328,7 @@ async function allocateFixtures(weekStartDate) {
           if (eligible.length === 0) continue;
 
           const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
+          console.log(`  Phase 2: ${pitch.venue_name} ${pitch.name} (id=${pitch.id}) — ${dayOfWeek} slots: ${daySlots.length > 0 ? daySlots.join(', ') : 'NONE'}, eligible: ${eligible.length}, occupied: ${occupiedSlots[pitch.id].join(', ') || 'none'}`);
           if (daySlots.length === 0) continue;
 
           const { allocated, overflow } = await allocateWithRotation(
