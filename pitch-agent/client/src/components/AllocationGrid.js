@@ -80,7 +80,8 @@ export default function AllocationGrid({ isAdmin = false }) {
       showToast(`Allocated ${res.data.allocated} fixtures${c.length ? `. ${c.length} conflicts.` : ''}`);
       loadGrid();
     } catch (err) {
-      showToast('Allocation failed', 'error');
+      const msg = err.response?.data?.error || err.message || 'Unknown error';
+      showToast(`Allocation failed: ${msg}`, 'error');
     }
     setLoading(false);
   };

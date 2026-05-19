@@ -187,23 +187,47 @@ router.post('/import', async (req, res) => {
     }
 
     let saved = 0;
+    let rescheduled = 0;
     for (const f of fixtures) {
       // Always recompute format server-side from gender + age_group
       const gender = f.gender || 'boys';
       const format = computeFormat(f.age_group, gender);
       try {
+        // If the fixture has a league_code, check for a rescheduled match
+        // (same league_code + home_team but different date)
+        if (f.league_code) {
+          const existing = await pool.query(
+            `SELECT id, match_date FROM fixtures
+             WHERE league_code = $1 AND home_team = $2 AND match_date != $3`,
+            [f.league_code, f.home_team, f.match_date]
+          );
+          if (existing.rows.length > 0) {
+            // Rescheduled match — update existing fixture's date instead of creating duplicate
+            await pool.query(
+              `UPDATE fixtures SET match_date = $1, kick_off = $2, venue_name = $3,
+               gender = $4, age_group = $5,
+               format = CASE WHEN format_override = true THEN format ELSE $6 END
+               WHERE id = $7`,
+              [f.match_date, f.kick_off, f.venue_name, gender, f.age_group, format, existing.rows[0].id]
+            );
+            rescheduled++;
+            saved++;
+            continue;
+          }
+        }
         await pool.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
-             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format`,
+             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group,
+             format = CASE WHEN fixtures.format_override = true THEN fixtures.format ELSE EXCLUDED.format END`,
           [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, gender, f.age_group, format]
         );
         saved++;
       } catch (e) { /* skip dupes */ }
     }
-    res.json({ success: true, saved, removed });
+    res.json({ success: true, saved, removed, rescheduled });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -261,12 +285,32 @@ router.post('/import-image', upload.single('image'), async (req, res) => {
       const fGender = f.gender || gender;
       const fFormat = computeFormat(f.age_group, fGender);
       try {
+        // Check for rescheduled match (same league_code + home_team, different date)
+        if (f.league_code) {
+          const existing = await pool.query(
+            `SELECT id, match_date FROM fixtures
+             WHERE league_code = $1 AND home_team = $2 AND match_date != $3`,
+            [f.league_code, f.home_team, f.match_date]
+          );
+          if (existing.rows.length > 0) {
+            await pool.query(
+              `UPDATE fixtures SET match_date = $1, kick_off = $2, venue_name = $3,
+               gender = $4, age_group = $5,
+               format = CASE WHEN format_override = true THEN format ELSE $6 END
+               WHERE id = $7`,
+              [f.match_date, f.kick_off, f.venue_name, fGender, f.age_group, fFormat, existing.rows[0].id]
+            );
+            saved++;
+            continue;
+          }
+        }
         await pool.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (match_date, home_team, away_team) DO UPDATE SET
              kick_off = EXCLUDED.kick_off, venue_name = EXCLUDED.venue_name,
-             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group, format = EXCLUDED.format`,
+             gender = EXCLUDED.gender, age_group = EXCLUDED.age_group,
+             format = CASE WHEN fixtures.format_override = true THEN fixtures.format ELSE EXCLUDED.format END`,
           [f.league_code, f.match_date, f.kick_off, f.home_team, f.away_team, f.venue_name, f.match_type || 'League / Cup', f.is_home_game ?? true, fGender, f.age_group, fFormat]
         );
         saved++;

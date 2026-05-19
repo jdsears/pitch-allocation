@@ -41,6 +41,7 @@ app.post('/api/setup', async (req, res) => {
     await client.query(`CREATE TABLE IF NOT EXISTS allocation_history (id SERIAL PRIMARY KEY, team_name VARCHAR(150), pitch_id INTEGER REFERENCES pitches(id), kick_off TIME, match_date DATE, created_at TIMESTAMP DEFAULT NOW())`);
 
     // --- MIGRATE additions ---
+    await client.query(`ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS format_override BOOLEAN DEFAULT false`);
     // Age restrictions: Shropham 11v11 is U14 max, Morley 11v11 is U15 min
     await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
     await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS min_age_group VARCHAR(10)`);
@@ -99,10 +100,13 @@ app.post('/api/setup', async (req, res) => {
   }
 });
 
-// Auto-migrate: ensure age restriction columns exist and are set
+// Auto-migrate: ensure new columns exist on every server start
 (async () => {
   try {
     const pool = require('./db/pool');
+    // format_override flag for fixtures (added for manual format changes)
+    await pool.query(`ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS format_override BOOLEAN DEFAULT false`);
+    // Age restriction columns for pitches
     await pool.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
     await pool.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS min_age_group VARCHAR(10)`);
     // Shropham 11v11: U14 max (undersized pitch)
@@ -117,7 +121,7 @@ app.post('/api/setup', async (req, res) => {
        WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
        AND format = '11v11' AND min_age_group IS NULL`
     );
-    console.log('Auto-migration: pitch age restrictions ready');
+    console.log('Auto-migration: format_override + pitch age restrictions ready');
   } catch (err) {
     // Tables may not exist yet (first run before /api/setup) — that's OK
     console.log('Auto-migration skipped (tables may not exist yet):', err.message);

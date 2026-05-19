@@ -32,6 +32,7 @@ router.post('/generate', async (req, res) => {
     const result = await allocateFixtures(week);
     res.json(result);
   } catch (err) {
+    console.error('Allocation generate error:', err);
     res.status(500).json({ error: err.message });
   }
 });
