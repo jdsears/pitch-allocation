@@ -95,11 +95,17 @@ export default function AdminPanel() {
 
   const handleRequestAction = async (id, status) => {
     try {
-      await updateRequest(id, { status });
-      showToast(`Request ${status}`);
+      const res = await updateRequest(id, { status });
+      if (status === 'approved' && res.data?.fixture) {
+        const f = res.data.fixture;
+        showToast(`Fixture created: ${f.home_team} v ${f.away_team}`);
+      } else {
+        showToast(`Request ${status}`);
+      }
       loadData();
     } catch (err) {
-      showToast('Update failed', 'error');
+      const msg = err.response?.data?.error || 'Update failed';
+      showToast(msg, 'error');
     }
   };
 
@@ -276,7 +282,7 @@ export default function AdminPanel() {
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-sm btn-success" onClick={() => handleRequestAction(req.id, 'approved')}>
-                          Approve
+                          {['friendly', 'other'].includes(req.request_type) ? 'Approve & Create Fixture' : 'Approve'}
                         </button>
                         <button className="btn btn-sm btn-outline" onClick={() => handleRequestAction(req.id, 'rejected')}>
                           Reject
