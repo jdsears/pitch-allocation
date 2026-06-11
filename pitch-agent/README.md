@@ -58,6 +58,26 @@ is disabled entirely (useful for first deploy, but set it!).
 Optional scrape schedule overrides: `SCRAPE_CRON` (default `0 6 * * *`)
 and `SCRAPE_TZ` (default `Europe/London`).
 
+#### Making the automatic scrape work from the cloud (`SCRAPE_PROXY`)
+
+FA Full-Time blocks cloud/data-centre IPs, so a scrape run from Railway
+times out ("Navigation timeout … exceeded"). To make the 06:00 automatic
+scrape work, route it through a UK residential/mobile proxy:
+
+```
+SCRAPE_PROXY=http://user:password@proxy-host:port
+```
+
+- Scheme optional (`host:port` assumes `http`); `socks5://…` also works.
+- Credentials are applied to the browser via authentication, never placed
+  in the Chromium `--proxy-server` flag, so they don't leak into process
+  listings.
+- Use a UK **residential/mobile** proxy. A data-centre proxy will likely be
+  blocked just like Railway itself.
+
+If `SCRAPE_PROXY` is unset, server scraping still runs but will fail when
+FA blocks it — the downloadable local script remains the fallback.
+
 For WhatsApp (optional, can add later):
 ```
 WHATSAPP_TOKEN=your_token

@@ -51,6 +51,40 @@ function isMorleyHome(homeTeam) {
   return homeTeam.toLowerCase().includes('morley');
 }
 
+/**
+ * Parse SCRAPE_PROXY into a Chromium-compatible server string + optional creds.
+ * FA Full-Time blocks cloud IPs, so the server-side scrape needs to egress
+ * through a UK/residential proxy. Accepts:
+ *   host:port
+ *   http://host:port
+ *   http://user:pass@host:port   (socks5://… also works)
+ * Chromium's --proxy-server can't carry credentials, so we strip them here
+ * and apply them per-page via page.authenticate().
+ */
+function parseProxy() {
+  const raw = (process.env.SCRAPE_PROXY || '').trim();
+  if (!raw) return null;
+  const withScheme = raw.includes('://') ? raw : `http://${raw}`;
+  try {
+    const u = new URL(withScheme);
+    const server = `${u.protocol}//${u.host}`; // host includes port
+    const username = u.username ? decodeURIComponent(u.username) : null;
+    const password = u.password ? decodeURIComponent(u.password) : null;
+    return { server, username, password };
+  } catch (e) {
+    console.warn(`Ignoring malformed SCRAPE_PROXY: ${e.message}`);
+    return null;
+  }
+}
+
+// Apply proxy credentials to a page if the proxy needs auth (no-op otherwise)
+async function applyProxyAuth(page) {
+  const proxy = parseProxy();
+  if (proxy && proxy.username) {
+    await page.authenticate({ username: proxy.username, password: proxy.password || '' });
+  }
+}
+
 // Launch a Puppeteer browser with Railway-compatible settings
 async function launchBrowser() {
   const launchOptions = {
@@ -63,6 +97,13 @@ async function launchBrowser() {
       '--single-process',
     ]
   };
+
+  const proxy = parseProxy();
+  if (proxy) {
+    launchOptions.args.push(`--proxy-server=${proxy.server}`);
+    // Log host only — never the credentials
+    console.log(`Scrape proxy enabled: ${proxy.server}${proxy.username ? ' (authenticated)' : ''}`);
+  }
 
   if (process.env.NODE_ENV === 'production') {
     const chromiumPath = findChromiumPath();
@@ -83,6 +124,7 @@ async function fetchRenderedHTML(url) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
+    await applyProxyAuth(page);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     // Block unnecessary resources to speed up loading
@@ -292,6 +334,7 @@ async function debugScrape(gender) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
+    await applyProxyAuth(page);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     // Block images/fonts to speed things up
@@ -583,4 +626,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape };
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy };
