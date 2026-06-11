@@ -30,6 +30,15 @@ export const getAvailableRefs = (date) => api.get('/referees/available', { param
 // Venues
 export const getVenues = () => api.get('/venues');
 
+// Teams
+export const getTeams = (activeOnly) => api.get('/teams', { params: activeOnly ? { active: 'true' } : {} });
+export const addTeam = (data) => api.post('/teams', data);
+export const updateTeam = (id, data) => api.put(`/teams/${id}`, data);
+export const deleteTeam = (id) => api.delete(`/teams/${id}`);
+export const syncTeamsFromFixtures = () => api.post('/teams/sync-from-fixtures');
+export const getRolloverPreview = () => api.get('/teams/rollover/preview');
+export const applyRollover = () => api.post('/teams/rollover/apply');
+
 // Requests
 export const getRequests = (status) => api.get('/requests', { params: { status } });
 export const submitRequest = (data) => api.post('/requests', data);

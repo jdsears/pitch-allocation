@@ -7,6 +7,7 @@ const fixtureRoutes = require('./routes/fixtures');
 const allocationRoutes = require('./routes/allocations');
 const refereeRoutes = require('./routes/referees');
 const generalRoutes = require('./routes/general');
+const teamRoutes = require('./routes/teams');
 const { startScheduler } = require('./services/scheduler');
 
 const app = express();
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use('/api/fixtures', fixtureRoutes);
 app.use('/api/allocations', allocationRoutes);
 app.use('/api/referees', refereeRoutes);
+app.use('/api/teams', teamRoutes);
 app.use('/api', generalRoutes);
 
 // Health check
