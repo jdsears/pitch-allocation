@@ -42,12 +42,21 @@ In the service settings, add:
 ```
 NODE_ENV=production
 BASE_URL=https://your-project.up.railway.app
+ADMIN_PASSWORD=choose-a-password
 FA_BOYS_CLUB_ID=926960945
 FA_BOYS_SEASON_ID=353505162
 FA_GIRLS_CLUB_ID=468454775
 FA_GIRLS_SEASON_ID=199649392
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ```
+
+`ADMIN_PASSWORD` protects the Admin tab and all admin actions (team/fixture
+edits, allocation, publish). The referee claim page, public calendar and
+request form are never password-protected. If the variable is unset, auth
+is disabled entirely (useful for first deploy, but set it!).
+
+Optional scrape schedule overrides: `SCRAPE_CRON` (default `0 6 * * *`)
+and `SCRAPE_TZ` (default `Europe/London`).
 
 For WhatsApp (optional, can add later):
 ```
