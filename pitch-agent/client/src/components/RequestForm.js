@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitRequest } from '../utils/api';
+import MorleyCrest from './MorleyCrest';
 
 export default function RequestForm() {
   const [form, setForm] = useState({
@@ -43,7 +44,10 @@ export default function RequestForm() {
   return (
     <div className="app" style={{ maxWidth: 500 }}>
       <header style={{ textAlign: 'center', padding: '20px 0', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20 }}>⚽ Pitch Request</h1>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+          <MorleyCrest size={64} />
+        </div>
+        <h1 style={{ fontSize: 20 }}>Morley YFC Pitch Request</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Friendlies, changes, or ad-hoc bookings</p>
       </header>
 

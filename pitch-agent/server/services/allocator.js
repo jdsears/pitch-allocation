@@ -119,10 +119,31 @@ async function allocateFixtures(weekStartDate) {
 
     // Get all pitches with venue info
     const pitches = await client.query(
-      `SELECT p.*, v.name as venue_name FROM pitches p 
-       JOIN venues v ON v.id = p.venue_id 
+      `SELECT p.*, v.name as venue_name FROM pitches p
+       JOIN venues v ON v.id = p.venue_id
        ORDER BY v.name, p.format`
     );
+
+    // Per-team overrides (home venue, format exception, default camera),
+    // keyed on the exact FA home-team name we store as the team name.
+    const teamRows = await client.query(
+      `SELECT name, format, home_venue_id, default_camera FROM teams`
+    );
+    const teamOverrides = {};
+    for (const t of teamRows.rows) {
+      teamOverrides[t.name.trim().toLowerCase()] = t;
+    }
+    const overrideFor = (homeTeam) => teamOverrides[(homeTeam || '').trim().toLowerCase()] || null;
+
+    // Apply a team's format override up front so it groups onto the right pitch
+    // type (persist it so the grid stays consistent; re-scrape won't undo it).
+    for (const f of fixtures.rows) {
+      const ov = overrideFor(f.home_team);
+      if (ov && ov.format && ov.format !== f.format) {
+        await client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [ov.format, f.id]);
+        f.format = ov.format;
+      }
+    }
 
     const allAllocations = [];
     const conflicts = [];
@@ -167,27 +188,26 @@ async function allocateFixtures(weekStartDate) {
           continue;
         }
 
-        let remaining = [...formatFixtures];
+        const allocatedIds = new Set();
 
-        for (const pitch of matchingPitches) {
-          if (remaining.length === 0) break;
+        // Fill one pitch from a candidate list, saving allocations + history
+        const fillPitch = async (candidates, pitch) => {
+          if (candidates.length === 0) return;
           if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
 
-          // Get available slots for this pitch on this day of week
           const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
-          
-          if (daySlots.length === 0) continue;
+          if (daySlots.length === 0) return;
 
-          const { allocated, overflow } = await allocateWithRotation(
-            remaining, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
+          const { allocated } = await allocateWithRotation(
+            candidates, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
           );
 
-          // Save allocations
           for (const { fixture, kickOff } of allocated) {
+            const camera = overrideFor(fixture.home_team)?.default_camera || null;
             const result = await client.query(
-              `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
-               VALUES ($1, $2, $3, 'draft', $4) RETURNING id`,
-              [fixture.id, pitch.id, kickOff, weekStart]
+              `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start, camera)
+               VALUES ($1, $2, $3, 'draft', $4, $5) RETURNING id`,
+              [fixture.id, pitch.id, kickOff, weekStart, camera]
             );
 
             await client.query(
@@ -197,17 +217,32 @@ async function allocateFixtures(weekStartDate) {
             );
 
             occupiedSlots[pitch.id].push(kickOff);
+            allocatedIds.add(fixture.id);
             allAllocations.push({ id: result.rows[0].id, fixture, pitch, kick_off: kickOff });
           }
+        };
 
-          remaining = overflow;
+        // Pass 1: honour each team's home-venue preference where possible
+        for (const pitch of matchingPitches) {
+          const candidates = formatFixtures.filter(
+            f => !allocatedIds.has(f.id) && overrideFor(f.home_team)?.home_venue_id === pitch.venue_id
+          );
+          await fillPitch(candidates, pitch);
+        }
+
+        // Pass 2: place everyone still unallocated on any matching pitch
+        for (const pitch of matchingPitches) {
+          const candidates = formatFixtures.filter(f => !allocatedIds.has(f.id));
+          await fillPitch(candidates, pitch);
         }
 
         // Anything left is a conflict
-        remaining.forEach(f => conflicts.push({ 
-          fixture: f, 
-          reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}` 
-        }));
+        formatFixtures
+          .filter(f => !allocatedIds.has(f.id))
+          .forEach(f => conflicts.push({
+            fixture: f,
+            reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}`,
+          }));
       }
     }
 

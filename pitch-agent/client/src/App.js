@@ -4,6 +4,8 @@ import AllocationGrid from './components/AllocationGrid';
 import AdminPanel from './components/AdminPanel';
 import RefClaimPage from './pages/RefClaimPage';
 import RequestForm from './components/RequestForm';
+import MorleyCrest from './components/MorleyCrest';
+import ThemeToggle from './components/ThemeToggle';
 
 function App() {
   return (
@@ -26,23 +28,30 @@ function Dashboard() {
   return (
     <div className="app">
       <header className="header">
-        <h1>
-          ⚽ <span>Morley YFC</span> Pitch Agent
-        </h1>
-        <nav className="nav">
-          <button
-            className={activeTab === 'grid' ? 'active' : ''}
-            onClick={() => setActiveTab('grid')}
-          >
-            Allocation Grid
-          </button>
-          <button
-            className={activeTab === 'admin' ? 'active' : ''}
-            onClick={() => setActiveTab('admin')}
-          >
-            Admin
-          </button>
-        </nav>
+        <div className="brand">
+          <MorleyCrest size={48} />
+          <div className="brand-text">
+            <h1><span>Morley YFC</span>&nbsp;Pitch Agent</h1>
+            <div className="brand-sub">Fixture &amp; Referee Allocation</div>
+          </div>
+        </div>
+        <div className="header-actions">
+          <nav className="nav">
+            <button
+              className={activeTab === 'grid' ? 'active' : ''}
+              onClick={() => setActiveTab('grid')}
+            >
+              Allocation Grid
+            </button>
+            <button
+              className={activeTab === 'admin' ? 'active' : ''}
+              onClick={() => setActiveTab('admin')}
+            >
+              Admin
+            </button>
+          </nav>
+          <ThemeToggle />
+        </div>
       </header>
 
       {activeTab === 'grid' && <AllocationGrid isAdmin={true} />}

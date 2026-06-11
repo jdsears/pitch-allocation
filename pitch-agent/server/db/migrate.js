@@ -157,6 +157,20 @@ const migrate = async () => {
       )
     `);
 
+    // Team management additions (idempotent — safe to re-run)
+    await client.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true`);
+    await client.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS default_camera VARCHAR(100)`);
+    // Only add the unique index if existing data allows it — otherwise a
+    // pre-existing duplicate would abort the whole migration transaction.
+    const dupNames = await client.query(
+      `SELECT 1 FROM teams GROUP BY name HAVING COUNT(*) > 1 LIMIT 1`
+    );
+    if (dupNames.rows.length === 0) {
+      await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS teams_name_unique ON teams (name)`);
+    } else {
+      console.warn('Skipping teams_name_unique index: duplicate team names exist — de-duplicate then re-run migrate');
+    }
+
     await client.query('COMMIT');
     console.log('Migration complete');
   } catch (err) {
