@@ -202,7 +202,8 @@ export default function AdminPanel() {
       await updateTeam(t.id, { active: !t.active });
       loadData();
     } catch (err) {
-      showToast('Update failed', 'error');
+      const msg = err.response?.data?.error || 'Update failed';
+      showToast(msg, 'error');
     }
   };
 
