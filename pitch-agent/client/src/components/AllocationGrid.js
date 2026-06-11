@@ -16,6 +16,8 @@ import {
   unclaimMatch,
 } from '../utils/api';
 import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
+import ConfirmModal from './ConfirmModal';
+import { KICKOFF_TIMES } from '../utils/constants';
 
 export default function AllocationGrid({ isAdmin = false }) {
   const [weekDate, setWeekDate] = useState(
@@ -33,6 +35,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [pitchOptions, setPitchOptions] = useState([]);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [editingFixtureId, setEditingFixtureId] = useState(null);
   const [editFixtureData, setEditFixtureData] = useState({});
 
@@ -169,26 +172,40 @@ export default function AllocationGrid({ isAdmin = false }) {
     setEditingId(null);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this allocation?')) return;
-    try {
-      await deleteAllocation(id);
-      showToast('Removed');
-      loadGrid();
-    } catch (err) {
-      showToast('Delete failed', 'error');
-    }
+  const handleDelete = (id) => {
+    setConfirmAction({
+      title: 'Remove this allocation?',
+      message: 'The fixture stays and can be re-allocated; only the pitch/time assignment is removed.',
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setConfirmAction(null);
+        try {
+          await deleteAllocation(id);
+          showToast('Removed');
+          loadGrid();
+        } catch (err) {
+          showToast('Delete failed', 'error');
+        }
+      },
+    });
   };
 
-  const handleDeleteFixture = async (fixtureId) => {
-    if (!window.confirm('Delete this fixture and its allocation? This cannot be undone.')) return;
-    try {
-      await deleteFixture(fixtureId);
-      showToast('Fixture deleted');
-      loadGrid();
-    } catch (err) {
-      showToast('Delete failed', 'error');
-    }
+  const handleDeleteFixture = (fixtureId) => {
+    setConfirmAction({
+      title: 'Delete this fixture?',
+      message: 'The fixture and its allocation are permanently deleted. This cannot be undone.',
+      confirmLabel: 'Delete fixture',
+      onConfirm: async () => {
+        setConfirmAction(null);
+        try {
+          await deleteFixture(fixtureId);
+          showToast('Fixture deleted');
+          loadGrid();
+        } catch (err) {
+          showToast('Delete failed', 'error');
+        }
+      },
+    });
   };
 
   const handleRefClaim = async (allocationId, refId) => {
@@ -359,7 +376,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                             onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
                             style={{ width: 80 }}
                           >
-                            {['09:00', '10:00', '10:30', '11:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
+                            {KICKOFF_TIMES.map((t) => (
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </select>
@@ -399,8 +416,8 @@ export default function AllocationGrid({ isAdmin = false }) {
                             </div>
                           ) : (
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button className="btn btn-sm btn-outline" onClick={() => handleEditFixture(f)}>✏️</button>
-                              <button className="btn btn-sm btn-outline" onClick={() => handleDeleteFixture(f.id)} style={{ color: 'var(--red)' }}>🗑</button>
+                              <button className="btn btn-sm btn-outline" onClick={() => handleEditFixture(f)} aria-label="Edit fixture" title="Edit fixture">✏️</button>
+                              <button className="btn btn-sm btn-outline" onClick={() => handleDeleteFixture(f.id)} style={{ color: 'var(--red)' }} aria-label="Delete fixture" title="Delete fixture">🗑</button>
                             </div>
                           )}
                         </td>
@@ -488,7 +505,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                                           onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
                                           style={{ width: 80 }}
                                         >
-                                          {['10:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
+                                          {KICKOFF_TIMES.map((t) => (
                                             <option key={t} value={t}>{t}</option>
                                           ))}
                                         </select>
@@ -578,8 +595,8 @@ export default function AllocationGrid({ isAdmin = false }) {
                                         </div>
                                       ) : (
                                         <div style={{ display: 'flex', gap: 4 }}>
-                                          <button className="btn btn-sm btn-outline" onClick={() => handleEdit(a)}>✏️</button>
-                                          <button className="btn btn-sm btn-outline" onClick={() => handleDelete(a.allocation_id)} style={{ color: 'var(--red)' }}>🗑</button>
+                                          <button className="btn btn-sm btn-outline" onClick={() => handleEdit(a)} aria-label="Edit allocation" title="Edit allocation">✏️</button>
+                                          <button className="btn btn-sm btn-outline" onClick={() => handleDelete(a.allocation_id)} style={{ color: 'var(--red)' }} aria-label="Remove allocation" title="Remove allocation">🗑</button>
                                         </div>
                                       )}
                                     </td>
@@ -599,6 +616,17 @@ export default function AllocationGrid({ isAdmin = false }) {
         </>
       )}
 
+      {/* Destructive-action confirmation */}
+      {confirmAction && (
+        <ConfirmModal
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
       {/* Publish confirmation modal */}
       {showPublishConfirm && (
         <div className="modal-overlay" onClick={() => setShowPublishConfirm(false)}>
@@ -610,8 +638,13 @@ export default function AllocationGrid({ isAdmin = false }) {
             </p>
             <div style={{ marginBottom: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
               {totalGames} games across {summary?.venues?.length || 0} venues.
-              {refsNeeded > 0 && <span style={{ color: 'var(--red)' }}> {refsNeeded} still need a ref.</span>}
             </div>
+            {refsNeeded > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, background: 'rgba(220, 60, 60, 0.12)', border: '1px solid var(--red)', borderRadius: 8, fontSize: 13, color: 'var(--red)' }}>
+                ⚠️ {refsNeeded} match{refsNeeded > 1 ? 'es' : ''} still {refsNeeded > 1 ? 'need' : 'needs'} a referee.
+                The WhatsApp message includes the claim link, so refs can pick these up after publishing.
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-outline" onClick={() => setShowPublishConfirm(false)}>Cancel</button>
               <button className="btn btn-success" onClick={handlePublish}>Confirm & Publish</button>

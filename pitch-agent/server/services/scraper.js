@@ -478,6 +478,7 @@ async function scrapeAll() {
 // persisted to the scrape_runs table so status survives restarts/redeploys.
 const scrapeState = {
   running: false,
+  runningSince: null,
   lastRunAt: null,
   lastResult: null,
   lastError: null,
@@ -485,6 +486,11 @@ const scrapeState = {
 };
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// If a run has held the lock longer than this, assume it hung (puppeteer can
+// stall indefinitely when FA blocks the host) and let a new run take over.
+// Without this, one stuck scrape blocks every future run until a redeploy.
+const STALE_RUN_MS = (parseInt(process.env.SCRAPE_STALE_MINUTES, 10) || 10) * 60 * 1000;
 
 /**
  * Run a scrape, recording status and preventing overlapping runs.
@@ -496,10 +502,15 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
  */
 async function runScrape(source = 'manual', { attempts = 1, retryDelayMs = 60000 } = {}) {
   if (scrapeState.running) {
-    console.log(`Scrape (${source}) skipped — another run is already in progress`);
-    return { skipped: true, reason: 'already running' };
+    const heldFor = Date.now() - (scrapeState.runningSince || 0);
+    if (heldFor < STALE_RUN_MS) {
+      console.log(`Scrape (${source}) skipped — another run is already in progress (${Math.round(heldFor / 1000)}s)`);
+      return { skipped: true, reason: 'already running', runningSince: scrapeState.runningSince };
+    }
+    console.warn(`Scrape (${source}): previous run has held the lock ${Math.round(heldFor / 60000)}min — assuming it hung, taking over`);
   }
   scrapeState.running = true;
+  scrapeState.runningSince = new Date().toISOString();
   scrapeState.lastSource = source;
 
   // Open a run row up front so even a crash mid-scrape leaves a trace
@@ -545,6 +556,7 @@ async function runScrape(source = 'manual', { attempts = 1, retryDelayMs = 60000
     throw lastErr;
   } finally {
     scrapeState.running = false;
+    scrapeState.runningSince = null;
   }
 }
 
@@ -556,6 +568,7 @@ async function getScrapeStatus() {
       const row = r.rows[0];
       return {
         running: scrapeState.running,
+        runningSince: scrapeState.runningSince,
         lastRunAt: row.finished_at || row.started_at,
         lastResult: row.error || row.finished_at === null
           ? null

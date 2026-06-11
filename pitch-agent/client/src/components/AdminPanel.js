@@ -18,6 +18,7 @@ import {
   scrapeFixtures,
   getScrapeStatus,
 } from '../utils/api';
+import ConfirmModal from './ConfirmModal';
 
 const EMPTY_TEAM = { name: '', age_group: '', format: '', gender: 'boys', home_venue_id: '', default_camera: '' };
 
@@ -138,6 +139,7 @@ export default function AdminPanel() {
   const [syncing, setSyncing] = useState(false);
   const [rolloverPlan, setRolloverPlan] = useState(null);
   const [scrapeStatus, setScrapeStatus] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [scraping, setScraping] = useState(false);
 
   const showToast = (msg, type = 'success') => {
@@ -148,6 +150,14 @@ export default function AdminPanel() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Live-update the scrape panel: poll while it's open or a run is active,
+  // so "Scrape now" and the daily sync show progress without manual refresh
+  useEffect(() => {
+    if (activeSection !== 'scrape' && !scrapeStatus?.running) return;
+    const t = setInterval(loadScrapeStatus, 5000);
+    return () => clearInterval(t);
+  }, [activeSection, scrapeStatus?.running]);
 
   const loadData = async () => {
     try {
@@ -181,7 +191,7 @@ export default function AdminPanel() {
     try {
       const res = await scrapeFixtures();
       if (res.data?.skipped) {
-        showToast('A scrape is already running', 'error');
+        showToast('A scrape was already in progress (daily sync or another admin) — status below tracks it', 'error');
       } else {
         showToast(`Scraped — ${res.data.saved} saved of ${res.data.total} found`);
       }
@@ -380,15 +390,22 @@ export default function AdminPanel() {
     }
   };
 
-  const removeTeam = async (t) => {
-    if (!window.confirm(`Delete ${t.name}? This only removes the team record, not its fixtures.`)) return;
-    try {
-      await deleteTeam(t.id);
-      showToast('Team deleted');
-      loadData();
-    } catch (err) {
-      showToast('Delete failed', 'error');
-    }
+  const removeTeam = (t) => {
+    setConfirmAction({
+      title: `Delete ${t.name}?`,
+      message: 'This only removes the team record (overrides, home venue, camera) — its fixtures are kept.',
+      confirmLabel: 'Delete team',
+      onConfirm: async () => {
+        setConfirmAction(null);
+        try {
+          await deleteTeam(t.id);
+          showToast('Team deleted');
+          loadData();
+        } catch (err) {
+          showToast('Delete failed', 'error');
+        }
+      },
+    });
   };
 
   const handleSyncTeams = async () => {
@@ -580,6 +597,17 @@ export default function AdminPanel() {
         </div>
       )}
 
+      {/* Destructive-action confirmation */}
+      {confirmAction && (
+        <ConfirmModal
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
       {/* Season rollover modal */}
       {rolloverPlan && (
         <div className="modal-overlay" onClick={() => setRolloverPlan(null)}>
@@ -614,7 +642,9 @@ export default function AdminPanel() {
             </table>
             <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
               <button className="btn btn-outline" onClick={() => setRolloverPlan(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={confirmRollover}>Apply rollover</button>
+              <button className="btn btn-primary" onClick={confirmRollover}>
+                Apply — promote {rolloverPlan.filter(p => p.change === 'promote').length}, archive {rolloverPlan.filter(p => p.change === 'archive').length}
+              </button>
             </div>
           </div>
         </div>
