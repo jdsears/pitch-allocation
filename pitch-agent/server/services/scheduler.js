@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { runScrape } = require('./scraper');
+const { runScrape, hasFaConfig } = require('./scraper');
 
 /**
  * Automatic fixture scraping.
@@ -13,13 +13,6 @@ const { runScrape } = require('./scraper');
  * scheduling and log a clear notice rather than launching doomed runs.
  */
 const DEFAULT_CRONS = ['0 6 * * *', '0 18 * * 5'];
-
-function hasFaConfig() {
-  return Boolean(
-    (process.env.FA_BOYS_CLUB_ID && process.env.FA_BOYS_SEASON_ID) ||
-    (process.env.FA_GIRLS_CLUB_ID && process.env.FA_GIRLS_SEASON_ID)
-  );
-}
 
 function startScheduler() {
   if (String(process.env.SCRAPE_AUTO || '').toLowerCase() === 'off') {

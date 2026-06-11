@@ -27,40 +27,61 @@ function isMorleyHome(homeTeam) {
   return homeTeam.toLowerCase().includes('morley');
 }
 
+// FA Full-Time club/season IDs. These are public (they appear in the
+// fixtures URL and in the club's manual scrape tool) so they double as
+// sensible defaults — override via env if a new season changes them.
+const FA_TARGETS = {
+  boys: {
+    club: process.env.FA_BOYS_CLUB_ID || '926960945',
+    season: process.env.FA_BOYS_SEASON_ID || '353505162',
+  },
+  girls: {
+    club: process.env.FA_GIRLS_CLUB_ID || '468454775',
+    season: process.env.FA_GIRLS_SEASON_ID || '199649392',
+  },
+};
+
+// True if we have at least one club/season pair to scrape
+function hasFaConfig() {
+  return Object.values(FA_TARGETS).some(t => t.club && t.season);
+}
+
+// Build the FA Full-Time fixtures URL for a club/season (proven query string)
+function buildFixturesUrl(clubId, seasonId) {
+  return `https://fulltime.thefa.com/fixtures.html?selectedSeason=${seasonId}` +
+    `&selectedFixtureGroupAgeGroup=0&selectedFixtureGroupKey=&selectedDateCode=all` +
+    `&selectedClub=${clubId}&selectedTeam=&selectedRelatedFixtureOption=3` +
+    `&selectedFixtureDateStatus=&selectedFixtureStatus=` +
+    `&previousSelectedFixtureGroupAgeGroup=0&previousSelectedFixtureGroupKey=` +
+    `&previousSelectedClub=${clubId}&itemsPerPage=100`;
+}
+
 // Scrape boys fixtures (filtered by club ID)
 async function scrapeBoysFixtures() {
-  const clubId = process.env.FA_BOYS_CLUB_ID;
-  const seasonId = process.env.FA_BOYS_SEASON_ID;
-  
-  const url = `https://fulltime.thefa.com/fixtures.html?selectedSeason=${seasonId}&selectedFixtureGroupAgeGroup=0&selectedFixtureGroupKey=&selectedDateCode=all&selectedClub=${clubId}&selectedTeam=&selectedRelatedFixtureOption=3&selectedFixtureDateStatus=&selectedFixtureStatus=&previousSelectedFixtureGroupAgeGroup=0&previousSelectedFixtureGroupKey=&previousSelectedClub=${clubId}&itemsPerPage=100`;
-
-  console.log('Scraping boys fixtures...');
-  const fixtures = await scrapeFixturePage(url);
-  
+  const { club, season } = FA_TARGETS.boys;
+  if (!club || !season) return [];
+  const url = buildFixturesUrl(club, season);
+  const fixtures = await scrapeFixturePage(url, 'Boys');
   return fixtures.map(f => ({ ...f, gender: 'boys' }));
 }
 
-// Scrape girls fixtures (now also filtered by club ID)
+// Scrape girls fixtures (filtered by club ID)
 async function scrapeGirlsFixtures() {
-  const clubId = process.env.FA_GIRLS_CLUB_ID;
-  const seasonId = process.env.FA_GIRLS_SEASON_ID;
-  
-  const url = `https://fulltime.thefa.com/fixtures.html?selectedSeason=${seasonId}&selectedFixtureGroupAgeGroup=0&selectedFixtureGroupKey=&selectedDateCode=all&selectedClub=${clubId}&selectedTeam=&selectedRelatedFixtureOption=3&selectedFixtureDateStatus=&selectedFixtureStatus=&previousSelectedFixtureGroupAgeGroup=&previousSelectedFixtureGroupKey=&previousSelectedClub=&itemsPerPage=100`;
-
-  console.log('Scraping girls fixtures...');
-  const fixtures = await scrapeFixturePage(url);
-  
+  const { club, season } = FA_TARGETS.girls;
+  if (!club || !season) return [];
+  const url = buildFixturesUrl(club, season);
+  const fixtures = await scrapeFixturePage(url, 'Girls');
   return fixtures.map(f => ({ ...f, gender: 'girls' }));
 }
 
 // Core scraping function using Puppeteer
-async function scrapeFixturePage(url) {
+async function scrapeFixturePage(url, label = 'fixtures') {
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.NODE_ENV === 'production' 
-        ? '/usr/bin/chromium' 
+      executablePath: process.env.NODE_ENV === 'production'
+        ? '/usr/bin/chromium'
         : undefined,
       args: [
         '--no-sandbox',
@@ -68,131 +89,173 @@ async function scrapeFixturePage(url) {
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--single-process',
-      ]
+      ],
     });
-    
+
     const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-    
-    // Wait for the fixture table to load
-    await page.waitForSelector('table, .fixtures-table, .results-table', { timeout: 10000 }).catch(() => {
-      console.log('No fixture table found, trying alternative selectors...');
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    );
+
+    // Block images / fonts / media — faster, lighter, and avoids timeouts
+    await page.setRequestInterception(true);
+    page.on('request', (r) => {
+      ['image', 'font', 'media'].includes(r.resourceType()) ? r.abort() : r.continue();
     });
+
+    console.log(`Scraping ${label}: ${url.substring(0, 80)}...`);
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+    // The fixtures table is rendered dynamically — give it a moment to settle
+    await page
+      .waitForSelector('.League-Results_Table, table, [class*=fixture], [class*=Fixture]', { timeout: 10000 })
+      .catch(() => console.log(`  No fixture table selector matched for ${label}`));
+    await new Promise((r) => setTimeout(r, 5000));
 
     const html = await page.content();
-    const $ = cheerio.load(html);
-    
-    const fixtures = [];
+    console.log(`  ${label}: captured ${html.length} bytes`);
 
-    // Parse fixture rows - FA Full-Time uses table rows with fixture data
-    // Based on the screenshot structure: league code | date/time | home team | VS | away team | venue
-    $('tr, .fixture-row').each((i, row) => {
-      const cells = $(row).find('td, .cell');
-      if (cells.length < 4) return;
-
-      // Try to extract fixture data from the row
-      const rowText = $(row).text().trim();
-      
-      // Look for date patterns (DD/MM/YY or DD/MM/YYYY)
-      const dateMatch = rowText.match(/(\d{2}\/\d{2}\/\d{2,4})/);
-      const timeMatch = rowText.match(/(\d{2}:\d{2})/);
-      
-      if (!dateMatch) return;
-
-      // Extract team names - look for "VS" or "v" separator
-      let homeTeam = '';
-      let awayTeam = '';
-      let leagueCode = '';
-      let venueName = '';
-
-      cells.each((j, cell) => {
-        const text = $(cell).text().trim();
-        
-        // First cell is usually the league code
-        if (j === 0 && text.match(/^\d{2}[A-Z]/)) {
-          leagueCode = text;
-        }
-      });
-
-      // Try to find team names around the VS separator
-      const vsIndex = rowText.indexOf(' VS ') !== -1 ? rowText.indexOf(' VS ') : rowText.indexOf(' v ');
-      
-      if (vsIndex === -1) return;
-
-      // Parse the cells more carefully
-      const cellTexts = [];
-      cells.each((j, cell) => {
-        cellTexts.push($(cell).text().trim());
-      });
-
-      // Typical structure from FA Full-Time:
-      // [league_code, date_time, home_team, (logo), VS, (logo), away_team, venue]
-      // But logos may or may not be in separate cells
-      
-      // Find the cell containing "VS" or "v"
-      let vsCell = -1;
-      cellTexts.forEach((text, idx) => {
-        if (text === 'VS' || text === 'v' || text === 'vs') vsCell = idx;
-      });
-
-      if (vsCell > 0) {
-        // Home team is typically 1-2 cells before VS
-        // Away team is typically 1-2 cells after VS
-        for (let k = vsCell - 1; k >= 0; k--) {
-          if (cellTexts[k].length > 3 && !cellTexts[k].match(/^\d/) && cellTexts[k] !== 'VS') {
-            homeTeam = cellTexts[k];
-            break;
-          }
-        }
-        for (let k = vsCell + 1; k < cellTexts.length; k++) {
-          if (cellTexts[k].length > 3 && !cellTexts[k].match(/^\d/) && cellTexts[k] !== 'VS') {
-            awayTeam = cellTexts[k];
-            break;
-          }
-        }
-        // Venue is usually the last meaningful cell
-        if (cellTexts.length > vsCell + 3) {
-          venueName = cellTexts[cellTexts.length - 1];
-        }
-      }
-
-      if (!homeTeam || !awayTeam) return;
-
-      // Parse date
-      const dateParts = dateMatch[1].split('/');
-      let year = dateParts[2];
-      if (year.length === 2) year = '20' + year;
-      const matchDate = `${year}-${dateParts[1]}-${dateParts[0]}`;
-
-      const kickOff = timeMatch ? timeMatch[1] : null;
-      const ageGroup = extractAgeGroup(homeTeam) || extractAgeGroup(awayTeam);
-      const format = getFormat(ageGroup);
-
-      fixtures.push({
-        league_code: leagueCode,
-        match_date: matchDate,
-        kick_off: kickOff,
-        home_team: homeTeam,
-        away_team: awayTeam,
-        venue_name: venueName,
-        is_home_game: isMorleyHome(homeTeam),
-        age_group: ageGroup,
-        format: format,
-        match_type: 'League / Cup'
-      });
-    });
-
-    console.log(`Found ${fixtures.length} fixtures`);
+    const fixtures = parseFixtures(html, label);
+    console.log(`  ${label}: parsed ${fixtures.length} fixtures`);
     return fixtures;
-
   } catch (err) {
-    console.error('Scraping error:', err.message);
+    console.error(`Scraping error (${label}):`, err.message);
     return [];
   } finally {
     if (browser) await browser.close();
   }
+}
+
+// Parse fixtures out of the FA Full-Time HTML. Uses several fallback
+// strategies because the table markup varies (this mirrors the club's
+// proven manual scrape tool).
+function parseFixtures(html, label = 'fixtures') {
+  const $ = cheerio.load(html);
+  const fixtures = [];
+
+  // Strategy 1: the FA's results table class
+  let rows;
+  const lrtRows = $('.League-Results_Table tr');
+  if (lrtRows.length > 0) {
+    rows = lrtRows;
+  } else {
+    // Strategy 2: any table row that contains a "v / vs / VS" separator
+    const vsRows = $('tr').filter((i, row) => {
+      const t = $(row).text();
+      return t.includes(' VS ') || t.includes(' v ') || t.includes(' vs ');
+    });
+    // Strategy 3: fall back to every table row
+    rows = vsRows.length > 0 ? vsRows : $('tr');
+  }
+
+  if (!rows || rows.length === 0) return fixtures;
+
+  rows.each((i, row) => {
+    if ($(row).find('th').length > 0) return; // header row
+    const cells = $(row).find('td');
+    if (cells.length < 3) return;
+
+    const cellTexts = [];
+    cells.each((j, c) => cellTexts.push($(c).text().trim()));
+    const rowText = cellTexts.join(' ');
+
+    const dateMatch = rowText.match(/(\d{2}\/\d{2}\/\d{2,4})/);
+    if (!dateMatch) return;
+    const timeMatch = rowText.match(/(\d{2}:\d{2})/);
+
+    const toDate = (raw) => {
+      const dp = raw.split('/');
+      let yr = dp[2];
+      if (yr && yr.length === 2) yr = '20' + yr;
+      return `${yr}-${dp[1]}-${dp[0]}`;
+    };
+
+    // Find a standalone VS cell
+    let vsCell = -1;
+    cellTexts.forEach((t, idx) => {
+      const u = t.trim().toUpperCase();
+      if (u === 'VS' || u === 'V' || u === 'VS.') vsCell = idx;
+    });
+
+    // Case A: "Home Team VS Away Team" packed into a single cell
+    if (vsCell === -1) {
+      for (const t of cellTexts) {
+        const m = t.match(/(.{4,})\s+(?:VS|vs|v|V)\s+(.{4,})/);
+        if (!m) continue;
+        const homeTeam = m[1].trim();
+        const awayTeam = m[2].trim();
+        const ageGroup = extractAgeGroup(homeTeam) || extractAgeGroup(awayTeam);
+        let venueName = '';
+        for (let k = cellTexts.length - 1; k >= 0; k--) {
+          const ct = cellTexts[k];
+          if (ct.length > 2 && ct !== t && !ct.match(/^\d{2}[/:]/) && ct !== dateMatch[1]) {
+            venueName = ct;
+            break;
+          }
+        }
+        fixtures.push({
+          league_code: '',
+          match_date: toDate(dateMatch[1]),
+          kick_off: timeMatch ? timeMatch[1] : null,
+          home_team: homeTeam,
+          away_team: awayTeam,
+          venue_name: venueName,
+          is_home_game: isMorleyHome(homeTeam),
+          age_group: ageGroup,
+          format: getFormat(ageGroup),
+          match_type: 'League / Cup',
+        });
+      }
+      return;
+    }
+
+    // Case B: teams live in separate cells either side of the VS cell
+    let leagueCode = '';
+    if (cellTexts[0] && cellTexts[0].match(/^\d{2}[A-Z]/)) leagueCode = cellTexts[0];
+
+    let homeTeam = '';
+    for (let k = vsCell - 1; k >= 0; k--) {
+      const t = cellTexts[k];
+      if (t.length > 3 && !t.match(/^\d{2}[/:]/) && !t.match(/^\d{2}[A-Z]/) && t.toUpperCase() !== 'VS') {
+        homeTeam = t;
+        break;
+      }
+    }
+    let awayTeam = '';
+    for (let k = vsCell + 1; k < cellTexts.length; k++) {
+      const t = cellTexts[k];
+      if (t.length > 3 && !t.match(/^\d{2}[/:]/) && t.toUpperCase() !== 'VS') {
+        awayTeam = t;
+        break;
+      }
+    }
+    if (!homeTeam || !awayTeam) return;
+
+    let venueName = '';
+    for (let k = cellTexts.length - 1; k > vsCell + 1; k--) {
+      const t = cellTexts[k];
+      if (t.length > 2 && t !== awayTeam && !t.match(/^\d{2}[/:]/) && t.toUpperCase() !== 'VS') {
+        venueName = t;
+        break;
+      }
+    }
+
+    const ageGroup = extractAgeGroup(homeTeam) || extractAgeGroup(awayTeam);
+    fixtures.push({
+      league_code: leagueCode,
+      match_date: toDate(dateMatch[1]),
+      kick_off: timeMatch ? timeMatch[1] : null,
+      home_team: homeTeam,
+      away_team: awayTeam,
+      venue_name: venueName,
+      is_home_game: isMorleyHome(homeTeam),
+      age_group: ageGroup,
+      format: getFormat(ageGroup),
+      match_type: 'League / Cup',
+    });
+  });
+
+  return fixtures;
 }
 
 // Save fixtures to database
@@ -293,6 +356,8 @@ module.exports = {
   scrapeAll,
   runScrape,
   getScrapeStatus,
+  hasFaConfig,
+  parseFixtures,
   scrapeBoysFixtures,
   scrapeGirlsFixtures,
   saveFixtures,
