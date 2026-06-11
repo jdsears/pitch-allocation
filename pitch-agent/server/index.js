@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const cron = require('node-cron');
+const { runScrape } = require('./services/scraper');
 
 const fixtureRoutes = require('./routes/fixtures');
 const allocationRoutes = require('./routes/allocations');
@@ -155,6 +157,26 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
   });
+}
+
+// Daily automatic fixture scrape. Runs at 06:00 UK time so fixtures are fresh
+// each morning without anyone clicking "Scrape now". Pin the timezone so the
+// hour is correct regardless of the container's clock (which is typically UTC).
+const SCRAPE_CRON = process.env.SCRAPE_CRON || '0 6 * * *';
+const SCRAPE_TZ = process.env.SCRAPE_TZ || 'Europe/London';
+if (cron.validate(SCRAPE_CRON)) {
+  cron.schedule(SCRAPE_CRON, async () => {
+    console.log('[cron] Daily fixture scrape starting');
+    try {
+      const result = await runScrape('scheduled');
+      console.log('[cron] Daily fixture scrape complete:', JSON.stringify(result));
+    } catch (err) {
+      console.error('[cron] Daily fixture scrape failed:', err.message);
+    }
+  }, { timezone: SCRAPE_TZ });
+  console.log(`Scheduled daily fixture scrape: "${SCRAPE_CRON}" (${SCRAPE_TZ})`);
+} else {
+  console.warn(`Invalid SCRAPE_CRON "${SCRAPE_CRON}" — daily scrape not scheduled`);
 }
 
 app.listen(PORT, () => {

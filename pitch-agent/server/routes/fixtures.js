@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const pool = require('../db/pool');
-const { scrapeAll, debugScrape } = require('../services/scraper');
+const { runScrape, getScrapeStatus, debugScrape } = require('../services/scraper');
 const { generateMacScript, generateWindowsScript } = require('../services/scrapeScriptGenerator');
 const { parseFixturesFromImage } = require('../services/ocrFixtureParser');
 
@@ -138,15 +138,20 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/fixtures/scrape - trigger fixture scraping
+// POST /api/fixtures/scrape - trigger fixture scraping manually
 router.post('/scrape', async (req, res) => {
   try {
-    console.log('Scrape triggered');
-    const result = await scrapeAll();
+    console.log('Scrape triggered (manual)');
+    const result = await runScrape('manual');
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/fixtures/scrape-status - last scrape result + schedule info
+router.get('/scrape-status', (req, res) => {
+  res.json(getScrapeStatus());
 });
 
 // POST /api/fixtures/import - manually import fixtures (for when scraper can't reach FA)

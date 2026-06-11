@@ -474,4 +474,46 @@ async function scrapeAll() {
   return { total: all.length, ...result };
 }
 
-module.exports = { scrapeAll, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape };
+// In-memory status of the most recent scrape, shared by the manual route and
+// the daily scheduler. Lets the app report when fixtures last synced, and the
+// `running` guard stops a scheduled run from overlapping a manual one.
+const scrapeState = {
+  running: false,
+  lastRunAt: null,
+  lastResult: null,
+  lastError: null,
+  lastSource: null,
+};
+
+/**
+ * Run a scrape, recording status and preventing overlapping runs.
+ * @param {string} source - 'manual' or 'scheduled', for logging/visibility.
+ * @returns the scrape result, or { skipped: true } if one is already running.
+ */
+async function runScrape(source = 'manual') {
+  if (scrapeState.running) {
+    console.log(`Scrape (${source}) skipped — another run is already in progress`);
+    return { skipped: true, reason: 'already running' };
+  }
+  scrapeState.running = true;
+  scrapeState.lastSource = source;
+  try {
+    const result = await scrapeAll();
+    scrapeState.lastResult = result;
+    scrapeState.lastError = null;
+    scrapeState.lastRunAt = new Date().toISOString();
+    return result;
+  } catch (err) {
+    scrapeState.lastError = err.message;
+    scrapeState.lastRunAt = new Date().toISOString();
+    throw err;
+  } finally {
+    scrapeState.running = false;
+  }
+}
+
+function getScrapeStatus() {
+  return { ...scrapeState };
+}
+
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape };
