@@ -15,6 +15,8 @@ import {
   syncTeamsFromFixtures,
   getRolloverPreview,
   applyRollover,
+  scrapeFixtures,
+  getScrapeStatus,
 } from '../utils/api';
 
 const EMPTY_TEAM = { name: '', age_group: '', format: '', gender: 'boys', home_venue_id: '', default_camera: '' };
@@ -135,6 +137,8 @@ export default function AdminPanel() {
   const [editingTeamId, setEditingTeamId] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [rolloverPlan, setRolloverPlan] = useState(null);
+  const [scrapeStatus, setScrapeStatus] = useState(null);
+  const [scraping, setScraping] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -160,6 +164,32 @@ export default function AdminPanel() {
     } catch (err) {
       console.error(err);
     }
+    loadScrapeStatus();
+  };
+
+  const loadScrapeStatus = async () => {
+    try {
+      const res = await getScrapeStatus();
+      setScrapeStatus(res.data);
+    } catch (err) {
+      // status endpoint optional — ignore if unavailable
+    }
+  };
+
+  const handleScrapeNow = async () => {
+    setScraping(true);
+    try {
+      const res = await scrapeFixtures();
+      if (res.data?.skipped) {
+        showToast('A scrape is already running', 'error');
+      } else {
+        showToast(`Scraped — ${res.data.saved} saved of ${res.data.total} found`);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Scrape failed', 'error');
+    }
+    setScraping(false);
+    loadScrapeStatus();
   };
 
   const handleAddRef = async (e) => {
@@ -658,6 +688,48 @@ export default function AdminPanel() {
             FA Full-Time blocks cloud servers, so scraping runs on your computer.
             Download the script below, double-click it, and fixtures will be imported automatically.
           </p>
+
+          {/* Automatic daily scrape status */}
+          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, marginBottom: 20 }}>
+            <div className="card-header" style={{ marginBottom: 8 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+                Automatic daily sync
+              </h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm btn-outline" onClick={loadScrapeStatus}>Refresh</button>
+                <button className="btn btn-sm btn-primary" onClick={handleScrapeNow} disabled={scraping || scrapeStatus?.running}>
+                  {scraping || scrapeStatus?.running ? '⏳ Scraping…' : 'Scrape now'}
+                </button>
+              </div>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 10 }}>
+              Fixtures are scraped automatically every morning at 06:00 (UK). You can also run it now.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 13 }}>
+              <span className="badge badge-blue">
+                Last run: {scrapeStatus?.lastRunAt ? new Date(scrapeStatus.lastRunAt).toLocaleString() : 'never'}
+              </span>
+              {scrapeStatus?.lastSource && (
+                <span className="badge badge-amber">via {scrapeStatus.lastSource}</span>
+              )}
+              {scrapeStatus?.lastResult && (
+                <span className="badge badge-green">
+                  {scrapeStatus.lastResult.saved} saved / {scrapeStatus.lastResult.total} found
+                </span>
+              )}
+              {scrapeStatus?.lastError && (
+                <span className="badge badge-red" title={scrapeStatus.lastError}>
+                  Last error: {String(scrapeStatus.lastError).slice(0, 60)}
+                </span>
+              )}
+            </div>
+            {scrapeStatus?.lastError && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
+                The cloud server may be blocked by FA Full-Time. If this keeps failing, use the
+                downloadable script below instead.
+              </p>
+            )}
+          </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             <a
