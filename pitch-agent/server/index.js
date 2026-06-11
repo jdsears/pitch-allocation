@@ -7,6 +7,7 @@ const fixtureRoutes = require('./routes/fixtures');
 const allocationRoutes = require('./routes/allocations');
 const refereeRoutes = require('./routes/referees');
 const generalRoutes = require('./routes/general');
+const teamRoutes = require('./routes/teams');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -42,6 +43,8 @@ app.post('/api/setup', async (req, res) => {
 
     // --- MIGRATE additions ---
     await client.query(`ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS format_override BOOLEAN DEFAULT false`);
+    await client.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true`);
+    await client.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS default_camera VARCHAR(100)`);
     // Age restrictions: Shropham 11v11 is U14 max, Morley 11v11 is U15 min
     await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS max_age_group VARCHAR(10)`);
     await client.query(`ALTER TABLE pitches ADD COLUMN IF NOT EXISTS min_age_group VARCHAR(10)`);
@@ -121,7 +124,18 @@ app.post('/api/setup', async (req, res) => {
        WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
        AND format = '11v11' AND min_age_group IS NULL`
     );
-    console.log('Auto-migration: format_override + pitch age restrictions ready');
+    // Team-management columns (active flag + default camera)
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS default_camera VARCHAR(100)`);
+    // Unique team name — only add if existing data has no duplicates, otherwise
+    // the index creation would throw and abort the rest of the migration.
+    const dupTeam = await pool.query(`SELECT 1 FROM teams GROUP BY name HAVING COUNT(*) > 1 LIMIT 1`);
+    if (dupTeam.rows.length === 0) {
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS teams_name_unique ON teams (name)`);
+    } else {
+      console.warn('Skipping teams_name_unique index: duplicate team names exist — de-duplicate then restart');
+    }
+    console.log('Auto-migration: format_override + pitch age restrictions + team columns ready');
   } catch (err) {
     // Tables may not exist yet (first run before /api/setup) — that's OK
     console.log('Auto-migration skipped (tables may not exist yet):', err.message);
@@ -132,6 +146,7 @@ app.post('/api/setup', async (req, res) => {
 app.use('/api/fixtures', fixtureRoutes);
 app.use('/api/allocations', allocationRoutes);
 app.use('/api/referees', refereeRoutes);
+app.use('/api/teams', teamRoutes);
 app.use('/api', generalRoutes);
 
 // Serve React build in production

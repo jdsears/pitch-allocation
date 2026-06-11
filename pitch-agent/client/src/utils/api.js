@@ -51,6 +51,16 @@ export const updateRequest = (id, data) => api.put(`/requests/${id}`, data);
 export const getCalendar = (week, weeks = 4) => api.get('/allocations/calendar', { params: { week, weeks } });
 
 // Teams
+// Distinct team-name list pulled from fixtures — used by the calendar filter.
 export const getTeams = () => api.get('/fixtures/teams');
+
+// Managed team records (CRUD + season tools)
+export const listTeams = (activeOnly) => api.get('/teams', { params: activeOnly ? { active: 'true' } : {} });
+export const addTeam = (data) => api.post('/teams', data);
+export const updateTeam = (id, data) => api.put(`/teams/${id}`, data);
+export const deleteTeam = (id) => api.delete(`/teams/${id}`);
+export const syncTeamsFromFixtures = () => api.post('/teams/sync-from-fixtures');
+export const getRolloverPreview = () => api.get('/teams/rollover/preview');
+export const applyRollover = () => api.post('/teams/rollover/apply');
 
 export default api;

@@ -191,6 +191,18 @@ async function allocateFixtures(weekStartDate) {
 
     console.log(`Available pitches: ${pitches.rows.map(p => `${p.venue_name} ${p.name} (${p.format})`).join(', ')}`);
 
+    // Active managed teams, keyed by lowercased name, for per-team overrides
+    // (explicit format exception + default camera). Venue is left to the
+    // age-based pitch restrictions above, which already steer U13/14 vs U15+.
+    const teamMap = {};
+    try {
+      const teamRows = await client.query(`SELECT name, format, default_camera FROM teams WHERE active = true`);
+      for (const t of teamRows.rows) teamMap[(t.name || '').trim().toLowerCase()] = t;
+    } catch (e) {
+      // teams table/columns may not exist on a fresh DB — overrides just don't apply
+    }
+    const teamFor = (homeTeam) => teamMap[(homeTeam || '').trim().toLowerCase()];
+
     const allAllocations = [];
     const conflicts = [];
 
@@ -224,10 +236,19 @@ async function allocateFixtures(weekStartDate) {
       const byFormat = {};
       for (const f of dateFixtures) {
         let reqFormat;
+        const team = teamFor(f.home_team);
         if (f.format_override && f.format) {
           // User manually set the format (e.g. changed a friendly to 7v7) — respect it
           reqFormat = f.format;
           console.log(`Format override respected: ${f.home_team} (${f.gender} ${f.age_group}): using manual ${reqFormat}`);
+        } else if (team && team.format) {
+          // Team has an explicit format exception configured in Team management
+          reqFormat = team.format;
+          if (reqFormat !== f.format) {
+            f.format = reqFormat;
+            client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+          }
+          console.log(`Team format exception: ${f.home_team} using ${reqFormat}`);
         } else {
           reqFormat = computeFormat(f.age_group, f.gender);
           if (reqFormat !== f.format) {
@@ -363,6 +384,28 @@ async function allocateFixtures(weekStartDate) {
           reason: `All ${reqFormat} slots full on ${dayOfWeek} ${date}`
         }));
       }
+    }
+
+    // Pre-fill the default camera for any draft allocation whose home team has
+    // one configured and that doesn't already have a camera set. Single safe
+    // post-pass — doesn't touch the slot/rotation logic above.
+    try {
+      const cam = await client.query(
+        `UPDATE allocations a
+            SET camera = t.default_camera
+           FROM fixtures f, teams t
+          WHERE a.fixture_id = f.id
+            AND a.week_start = $1
+            AND (a.camera IS NULL OR a.camera = '')
+            AND a.status = 'draft'
+            AND t.active = true
+            AND t.default_camera IS NOT NULL AND t.default_camera <> ''
+            AND lower(trim(f.home_team)) = lower(trim(t.name))`,
+        [weekStart]
+      );
+      if (cam.rowCount > 0) console.log(`Pre-filled default camera on ${cam.rowCount} allocation(s)`);
+    } catch (e) {
+      // teams table/columns may not exist yet — skip camera pre-fill
     }
 
     console.log(`Allocated: ${allAllocations.length}, Conflicts: ${conflicts.length}`);
