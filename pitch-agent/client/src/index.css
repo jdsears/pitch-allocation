@@ -6,8 +6,9 @@
 
 /* =================================================================
    MORLEY YOUTH FC BRAND COLOURS
-   Single source of truth — drop the club's exact hex codes here and
-   the whole app (both light and dark themes) updates automatically.
+   Official palette, sampled from the club badge and cover image.
+   Single source of truth — edit here and the whole app (both light
+   and dark themes) updates automatically.
    ================================================================= */
 :root {
   --brand-blue: #3e68c7;       /* royal blue (club cover)        */
