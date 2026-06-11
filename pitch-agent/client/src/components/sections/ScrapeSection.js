@@ -88,8 +88,10 @@ export default function ScrapeSection({ showToast }) {
             </div>
             {scrapeStatus?.lastError && (
               <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
-                The cloud server may be blocked by FA Full-Time. If this keeps failing, use the
-                downloadable script below instead.
+                A timeout usually means FA Full-Time is blocking the cloud server's IP. Set a
+                <code style={{ background: 'var(--bg-primary)', padding: '1px 5px', borderRadius: 4, margin: '0 4px' }}>SCRAPE_PROXY</code>
+                (UK/residential proxy — see README) to fix the automatic scrape, or use the
+                downloadable script below in the meantime.
               </p>
             )}
           </div>
