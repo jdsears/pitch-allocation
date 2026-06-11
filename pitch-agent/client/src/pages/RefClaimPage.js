@@ -90,21 +90,26 @@ export default function RefClaimPage() {
         )}
       </header>
 
-      {/* Ref selector - sticky on mobile */}
+      {/* Ref selector - sticky on mobile. Stacked label + full-width select
+          so it stays readable and easy to tap on a phone at the touchline. */}
       <div className="card" style={{ marginBottom: 16, position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>🏁 I am:</label>
-          <select
-            value={selectedRef}
-            onChange={(e) => setSelectedRef(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
-          >
-            <option value="">Select your name to claim matches...</option>
-            {referees.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        </div>
+        <label
+          htmlFor="ref-select"
+          style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}
+        >
+          🏁 I am:
+        </label>
+        <select
+          id="ref-select"
+          value={selectedRef}
+          onChange={(e) => setSelectedRef(e.target.value)}
+          style={{ width: '100%', minHeight: 44, fontSize: 15 }}
+        >
+          <option value="">Select your name to claim matches...</option>
+          {referees.map(r => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
       </div>
 
       {loading && (

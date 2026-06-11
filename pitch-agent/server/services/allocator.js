@@ -137,8 +137,11 @@ async function allocateWithRotation(fixtures, pitchId, availableSlots, occupiedS
  */
 async function allocateFixtures(weekStartDate) {
   const client = await pool.connect();
-  
+
   try {
+    // Whole run is one transaction: a mid-run failure can't leave the week
+    // half-allocated with the old drafts already deleted.
+    await client.query('BEGIN');
     const weekStart = weekStartDate || format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const weekEnd = format(addDays(new Date(weekStart), 6), 'yyyy-MM-dd');
 
@@ -174,6 +177,7 @@ async function allocateFixtures(weekStartDate) {
 
     if (fixtures.rows.length === 0) {
       console.log('No unallocated home fixtures for this week');
+      await client.query('COMMIT');
       return { allocated: 0, conflicts: [] };
     }
 
@@ -248,7 +252,7 @@ async function allocateFixtures(weekStartDate) {
           reqFormat = team.format;
           if (reqFormat !== f.format) {
             f.format = reqFormat;
-            client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+            await client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]);
           }
           console.log(`Team format exception: ${f.home_team} using ${reqFormat}`);
         } else {
@@ -257,7 +261,7 @@ async function allocateFixtures(weekStartDate) {
             console.log(`Format correction: ${f.home_team} (${f.gender} ${f.age_group}): DB has ${f.format}, using ${reqFormat}`);
             f.format = reqFormat;
             // Also fix it in the DB while we're at it
-            client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]).catch(() => {});
+            await client.query('UPDATE fixtures SET format = $1 WHERE id = $2', [reqFormat, f.id]);
           }
         }
         if (!byFormat[reqFormat]) byFormat[reqFormat] = [];
@@ -468,8 +472,12 @@ async function allocateFixtures(weekStartDate) {
     }
 
     console.log(`Allocated: ${allAllocations.length}, Conflicts: ${conflicts.length}`);
+    await client.query('COMMIT');
     return { allocated: allAllocations.length, allocations: allAllocations, conflicts };
 
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
   } finally {
     client.release();
   }

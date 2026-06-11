@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
+const { requireAdmin } = require('../middleware/auth');
 
 // GET /api/referees - list all active referees
 router.get('/', async (req, res) => {
@@ -15,7 +16,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/referees - add a new referee
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, phone } = req.body;
     const result = await pool.query(
@@ -29,7 +30,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/referees/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { name, phone, active } = req.body;
     const result = await pool.query(

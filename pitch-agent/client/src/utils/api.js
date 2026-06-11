@@ -4,6 +4,20 @@ const API_BASE = process.env.REACT_APP_API_URL || '/api';
 
 const api = axios.create({ baseURL: API_BASE });
 
+// --- Admin auth ---
+// Token from POST /auth/login, kept in localStorage and sent on every call.
+const TOKEN_KEY = 'morley_admin_token';
+export const getAdminToken = () => localStorage.getItem(TOKEN_KEY);
+export const setAdminToken = (t) => t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+api.interceptors.request.use((config) => {
+  const token = getAdminToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export const adminLogin = (password) => api.post('/auth/login', { password });
+export const getAuthStatus = () => api.get('/auth/status');
+
 // Fixtures
 export const getFixtures = (params) => api.get('/fixtures', { params });
 export const scrapeFixtures = () => api.post('/fixtures/scrape');

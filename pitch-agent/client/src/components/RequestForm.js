@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitRequest } from '../utils/api';
+import { KICKOFF_TIMES } from '../utils/constants';
 
 export default function RequestForm() {
   const [form, setForm] = useState({
@@ -91,11 +92,7 @@ export default function RequestForm() {
             style={{ width: '100%' }}
           >
             <option value="">No preference</option>
-            <option value="10:00">10:00</option>
-            <option value="11:15">11:15</option>
-            <option value="12:00">12:00</option>
-            <option value="12:30">12:30</option>
-            <option value="14:00">14:00</option>
+            {KICKOFF_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
 

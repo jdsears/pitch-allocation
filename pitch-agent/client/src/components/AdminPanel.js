@@ -8,18 +8,9 @@ import {
   importFixtureImage,
   getRequests,
   updateRequest,
-  listTeams,
-  addTeam,
-  updateTeam,
-  deleteTeam,
-  syncTeamsFromFixtures,
-  getRolloverPreview,
-  applyRollover,
-  scrapeFixtures,
-  getScrapeStatus,
 } from '../utils/api';
-
-const EMPTY_TEAM = { name: '', age_group: '', format: '', gender: 'boys', home_venue_id: '', default_camera: '' };
+import TeamsSection from './sections/TeamsSection';
+import ScrapeSection from './sections/ScrapeSection';
 
 const selectStyle = {
   fontSize: 13,
@@ -132,13 +123,6 @@ export default function AdminPanel() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrPreview, setOcrPreview] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
-  const [teams, setTeams] = useState([]);
-  const [teamForm, setTeamForm] = useState(EMPTY_TEAM);
-  const [editingTeamId, setEditingTeamId] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [rolloverPlan, setRolloverPlan] = useState(null);
-  const [scrapeStatus, setScrapeStatus] = useState(null);
-  const [scraping, setScraping] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -151,45 +135,17 @@ export default function AdminPanel() {
 
   const loadData = async () => {
     try {
-      const [refsRes, venuesRes, reqRes, teamsRes] = await Promise.all([
+      const [refsRes, venuesRes, reqRes] = await Promise.all([
         getReferees(),
         getVenues(),
         getRequests('pending'),
-        listTeams(),
       ]);
       setReferees(refsRes.data);
       setVenues(venuesRes.data);
       setRequests(reqRes.data);
-      setTeams(teamsRes.data);
     } catch (err) {
       console.error(err);
     }
-    loadScrapeStatus();
-  };
-
-  const loadScrapeStatus = async () => {
-    try {
-      const res = await getScrapeStatus();
-      setScrapeStatus(res.data);
-    } catch (err) {
-      // status endpoint optional — ignore if unavailable
-    }
-  };
-
-  const handleScrapeNow = async () => {
-    setScraping(true);
-    try {
-      const res = await scrapeFixtures();
-      if (res.data?.skipped) {
-        showToast('A scrape is already running', 'error');
-      } else {
-        showToast(`Scraped — ${res.data.saved} saved of ${res.data.total} found`);
-      }
-    } catch (err) {
-      showToast(err.response?.data?.error || 'Scrape failed', 'error');
-    }
-    setScraping(false);
-    loadScrapeStatus();
   };
 
   const handleAddRef = async (e) => {
@@ -329,100 +285,6 @@ export default function AdminPanel() {
     }
   };
 
-  const submitTeam = async (e) => {
-    e.preventDefault();
-    if (!teamForm.name.trim()) return;
-    const payload = {
-      ...teamForm,
-      home_venue_id: teamForm.home_venue_id || null,
-      format: teamForm.format || null,
-      default_camera: teamForm.default_camera || null,
-    };
-    try {
-      if (editingTeamId) {
-        await updateTeam(editingTeamId, payload);
-        showToast('Team updated');
-      } else {
-        await addTeam(payload);
-        showToast('Team added');
-      }
-      setTeamForm(EMPTY_TEAM);
-      setEditingTeamId(null);
-      loadData();
-    } catch (err) {
-      showToast(err.response?.data?.error || 'Save failed', 'error');
-    }
-  };
-
-  const editTeam = (t) => {
-    setEditingTeamId(t.id);
-    setTeamForm({
-      name: t.name,
-      age_group: t.age_group || '',
-      format: t.format || '',
-      gender: t.gender || 'boys',
-      home_venue_id: t.home_venue_id || '',
-      default_camera: t.default_camera || '',
-    });
-  };
-
-  const cancelEditTeam = () => {
-    setEditingTeamId(null);
-    setTeamForm(EMPTY_TEAM);
-  };
-
-  const toggleTeamActive = async (t) => {
-    try {
-      await updateTeam(t.id, { active: !t.active });
-      loadData();
-    } catch (err) {
-      showToast(err.response?.data?.error || 'Update failed', 'error');
-    }
-  };
-
-  const removeTeam = async (t) => {
-    if (!window.confirm(`Delete ${t.name}? This only removes the team record, not its fixtures.`)) return;
-    try {
-      await deleteTeam(t.id);
-      showToast('Team deleted');
-      loadData();
-    } catch (err) {
-      showToast('Delete failed', 'error');
-    }
-  };
-
-  const handleSyncTeams = async () => {
-    setSyncing(true);
-    try {
-      const res = await syncTeamsFromFixtures();
-      showToast(`Synced — ${res.data.added} new team(s) from ${res.data.scanned} found`);
-      loadData();
-    } catch (err) {
-      showToast('Sync failed', 'error');
-    }
-    setSyncing(false);
-  };
-
-  const openRollover = async () => {
-    try {
-      const res = await getRolloverPreview();
-      setRolloverPlan(res.data.plan);
-    } catch (err) {
-      showToast('Could not load rollover preview', 'error');
-    }
-  };
-
-  const confirmRollover = async () => {
-    try {
-      const res = await applyRollover();
-      showToast(`Rollover applied — ${res.data.promoted} promoted, ${res.data.archived} archived`);
-      setRolloverPlan(null);
-      loadData();
-    } catch (err) {
-      showToast('Rollover failed', 'error');
-    }
-  };
-
   const validCount = manualRows.filter(r => r.match_date && r.home_team && r.away_team).length;
 
   return (
@@ -461,164 +323,7 @@ export default function AdminPanel() {
       </div>
 
       {/* Teams */}
-      {activeSection === 'teams' && (
-        <div className="card">
-          <div className="card-header">
-            <h2>👕 Teams</h2>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-sm btn-outline" onClick={handleSyncTeams} disabled={syncing}>
-                {syncing ? '⏳ Syncing…' : 'Sync from fixtures'}
-              </button>
-              <button className="btn btn-sm btn-primary" onClick={openRollover}>
-                Season rollover →
-              </button>
-            </div>
-          </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-            Teams are matched to scraped fixtures by name. Set a home venue or format
-            override to steer allocation; a default camera pre-fills new allocations.
-          </p>
-
-          <form onSubmit={submitTeam} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            <input
-              placeholder="Team name (must match FA name)"
-              value={teamForm.name}
-              onChange={e => setTeamForm({ ...teamForm, name: e.target.value })}
-              style={{ flex: '2 1 220px' }}
-            />
-            <input
-              placeholder="Age (U13)"
-              value={teamForm.age_group}
-              onChange={e => setTeamForm({ ...teamForm, age_group: e.target.value })}
-              style={{ flex: '1 1 80px' }}
-            />
-            <select
-              value={teamForm.format}
-              onChange={e => setTeamForm({ ...teamForm, format: e.target.value })}
-              style={{ flex: '1 1 110px' }}
-            >
-              <option value="">Format (auto)</option>
-              <option value="5v5">5v5</option>
-              <option value="7v7">7v7</option>
-              <option value="9v9">9v9</option>
-              <option value="11v11">11v11</option>
-            </select>
-            <select
-              value={teamForm.gender}
-              onChange={e => setTeamForm({ ...teamForm, gender: e.target.value })}
-              style={{ flex: '1 1 90px' }}
-            >
-              <option value="boys">Boys</option>
-              <option value="girls">Girls</option>
-            </select>
-            <select
-              value={teamForm.home_venue_id}
-              onChange={e => setTeamForm({ ...teamForm, home_venue_id: e.target.value })}
-              style={{ flex: '1 1 130px' }}
-            >
-              <option value="">Home venue (any)</option>
-              {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-            <input
-              placeholder="Default camera"
-              value={teamForm.default_camera}
-              onChange={e => setTeamForm({ ...teamForm, default_camera: e.target.value })}
-              style={{ flex: '1 1 120px' }}
-            />
-            <button type="submit" className="btn btn-primary">
-              {editingTeamId ? 'Save' : 'Add'}
-            </button>
-            {editingTeamId && (
-              <button type="button" className="btn btn-outline" onClick={cancelEditTeam}>Cancel</button>
-            )}
-          </form>
-
-          {teams.length === 0 ? (
-            <div className="empty-state"><p>No teams yet — add one or sync from fixtures.</p></div>
-          ) : (
-            <table className="grid-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Age</th>
-                  <th>Format</th>
-                  <th>Gender</th>
-                  <th>Home venue</th>
-                  <th>Camera</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teams.map(t => (
-                  <tr key={t.id} style={{ opacity: t.active ? 1 : 0.5 }}>
-                    <td>{t.name}</td>
-                    <td>{t.age_group || '—'}</td>
-                    <td><span className="badge badge-blue">{t.format || '—'}</span></td>
-                    <td>{t.gender}</td>
-                    <td>{t.home_venue_name || '—'}</td>
-                    <td>{t.default_camera || '—'}</td>
-                    <td>
-                      <span className={`badge ${t.active ? 'badge-green' : 'badge-red'}`}>
-                        {t.active ? 'Active' : 'Archived'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-outline" onClick={() => editTeam(t)}>Edit</button>
-                        <button className="btn btn-sm btn-outline" onClick={() => toggleTeamActive(t)}>
-                          {t.active ? 'Archive' : 'Restore'}
-                        </button>
-                        <button className="btn btn-sm btn-outline" onClick={() => removeTeam(t)}>Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Season rollover modal */}
-      {rolloverPlan && (
-        <div className="modal-overlay" onClick={() => setRolloverPlan(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="card-header">
-              <h2>🔁 New Season Rollover</h2>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-              Every active team moves up one age group. U18s are archived. Review before applying.
-            </p>
-            <table className="grid-table">
-              <thead>
-                <tr><th>Team</th><th>Change</th><th>Result</th></tr>
-              </thead>
-              <tbody>
-                {rolloverPlan.map(p => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>
-                      <span className={`badge ${p.change === 'archive' ? 'badge-red' : p.change === 'promote' ? 'badge-green' : 'badge-amber'}`}>
-                        {p.change}
-                      </span>
-                    </td>
-                    <td>
-                      {p.change === 'promote' && `${p.from} → ${p.new_age} (${p.new_name})`}
-                      {p.change === 'archive' && 'Archived'}
-                      {p.change === 'skip' && (p.reason || 'No change')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline" onClick={() => setRolloverPlan(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={confirmRollover}>Apply rollover</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeSection === 'teams' && <TeamsSection venues={venues} showToast={showToast} />}
 
       {/* Referees */}
       {activeSection === 'referees' && (
@@ -679,128 +384,7 @@ export default function AdminPanel() {
       )}
 
       {/* Scrape from FA */}
-      {activeSection === 'scrape' && (
-        <div className="card">
-          <div className="card-header">
-            <h2>Scrape FA Full-Time</h2>
-          </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-            FA Full-Time blocks cloud servers, so scraping runs on your computer.
-            Download the script below, double-click it, and fixtures will be imported automatically.
-          </p>
-
-          {/* Automatic daily scrape status */}
-          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, marginBottom: 20 }}>
-            <div className="card-header" style={{ marginBottom: 8 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-                Automatic daily sync
-              </h3>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-sm btn-outline" onClick={loadScrapeStatus}>Refresh</button>
-                <button className="btn btn-sm btn-primary" onClick={handleScrapeNow} disabled={scraping || scrapeStatus?.running}>
-                  {scraping || scrapeStatus?.running ? '⏳ Scraping…' : 'Scrape now'}
-                </button>
-              </div>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 10 }}>
-              Fixtures are scraped automatically every morning at 06:00 (UK). You can also run it now.
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 13 }}>
-              <span className="badge badge-blue">
-                Last run: {scrapeStatus?.lastRunAt ? new Date(scrapeStatus.lastRunAt).toLocaleString() : 'never'}
-              </span>
-              {scrapeStatus?.lastSource && (
-                <span className="badge badge-amber">via {scrapeStatus.lastSource}</span>
-              )}
-              {scrapeStatus?.lastResult && (
-                <span className="badge badge-green">
-                  {scrapeStatus.lastResult.saved} saved / {scrapeStatus.lastResult.total} found
-                </span>
-              )}
-              {scrapeStatus?.lastError && (
-                <span className="badge badge-red" title={scrapeStatus.lastError}>
-                  Last error: {String(scrapeStatus.lastError).slice(0, 60)}
-                </span>
-              )}
-            </div>
-            {scrapeStatus?.lastError && (
-              <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
-                The cloud server may be blocked by FA Full-Time. If this keeps failing, use the
-                downloadable script below instead.
-              </p>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-            <a
-              href="/api/fixtures/scrape-script?platform=mac"
-              download="morley-scrape.command"
-              className="btn btn-primary"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              Download for Mac
-            </a>
-            <a
-              href="/api/fixtures/scrape-script?platform=windows"
-              download="morley-scrape.ps1"
-              className="btn btn-primary"
-              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              Download for Windows
-            </a>
-          </div>
-
-          {/* Node.js Installation */}
-          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Step 1: Install Node.js (if you don't have it)</h3>
-            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-              <p style={{ marginBottom: 8 }}>The scrape script requires Node.js. Check if it's installed by opening Terminal (Mac) or PowerShell (Windows) and typing: <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>node --version</code></p>
-
-              <p><strong>Mac:</strong></p>
-              <ol style={{ paddingLeft: 20, margin: '4px 0 12px' }}>
-                <li>Go to <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a></li>
-                <li>Click the <strong>LTS</strong> (recommended) download button</li>
-                <li>Open the downloaded <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>.pkg</code> file and follow the installer</li>
-                <li>Restart Terminal if it was open</li>
-              </ol>
-
-              <p><strong>Windows:</strong></p>
-              <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
-                <li>Go to <a href="https://nodejs.org" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>nodejs.org</a></li>
-                <li>Click the <strong>LTS</strong> (recommended) download button</li>
-                <li>Run the downloaded <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>.msi</code> installer, accept defaults</li>
-                <li>Restart PowerShell if it was open</li>
-              </ol>
-            </div>
-          </div>
-
-          {/* Running the Script */}
-          <div style={{ background: 'var(--bg-input)', padding: 16, borderRadius: 8, fontSize: 13 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Step 2: Run the Scrape Script</h3>
-            <div style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-              <p style={{ marginBottom: 4 }}><strong>Mac:</strong></p>
-              <ol style={{ paddingLeft: 20, margin: '4px 0 12px' }}>
-                <li>Download the <strong>.command</strong> file above</li>
-                <li>Open Terminal and run: <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: 4 }}>chmod +x ~/Downloads/morley-scrape.command</code></li>
-                <li><strong>Important:</strong> Don't double-click — instead <strong>right-click</strong> the file and select <strong>"Open"</strong></li>
-                <li>If you see "macOS cannot verify the developer" — click <strong>"Open"</strong> in the dialog</li>
-                <li>You only need to do this once. After that, double-click works fine.</li>
-              </ol>
-
-              <p style={{ marginBottom: 4 }}><strong>Windows:</strong></p>
-              <ol style={{ paddingLeft: 20, margin: '4px 0' }}>
-                <li>Download the <strong>.ps1</strong> file above</li>
-                <li>Right-click the file and select <strong>"Run with PowerShell"</strong></li>
-                <li>If prompted about execution policy, type <strong>Y</strong> and press Enter</li>
-              </ol>
-
-              <p style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12 }}>
-                First run takes ~1 minute to download Chromium. Subsequent runs are faster.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeSection === 'scrape' && <ScrapeSection showToast={showToast} />}
 
       {/* Import */}
       {activeSection === 'import' && (

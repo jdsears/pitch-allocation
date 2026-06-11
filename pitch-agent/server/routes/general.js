@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
+const { requireAdmin } = require('../middleware/auth');
 
 // --- VENUES & PITCHES ---
 
@@ -61,7 +62,7 @@ router.post('/requests', async (req, res) => {
 
 // PUT /api/requests/:id - update request status
 // When approving with fixture data, also creates a fixture
-router.put('/requests/:id', async (req, res) => {
+router.put('/requests/:id', requireAdmin, async (req, res) => {
   try {
     const { status, fixture } = req.body;
     const result = await pool.query(
