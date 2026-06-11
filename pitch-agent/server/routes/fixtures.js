@@ -150,8 +150,8 @@ router.post('/scrape', async (req, res) => {
 });
 
 // GET /api/fixtures/scrape-status - last scrape result + schedule info
-router.get('/scrape-status', (req, res) => {
-  res.json(getScrapeStatus());
+router.get('/scrape-status', async (req, res) => {
+  res.json(await getScrapeStatus());
 });
 
 // POST /api/fixtures/import - manually import fixtures (for when scraper can't reach FA)

@@ -474,9 +474,8 @@ async function scrapeAll() {
   return { total: all.length, ...result };
 }
 
-// In-memory status of the most recent scrape, shared by the manual route and
-// the daily scheduler. Lets the app report when fixtures last synced, and the
-// `running` guard stops a scheduled run from overlapping a manual one.
+// The `running` guard lives in memory (single process); run history is
+// persisted to the scrape_runs table so status survives restarts/redeploys.
 const scrapeState = {
   running: false,
   lastRunAt: null,
@@ -485,34 +484,89 @@ const scrapeState = {
   lastSource: null,
 };
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 /**
  * Run a scrape, recording status and preventing overlapping runs.
  * @param {string} source - 'manual' or 'scheduled', for logging/visibility.
+ * @param {object} opts - { attempts, retryDelayMs }: the scheduled run
+ *   retries (FA Full-Time is flaky); manual runs default to one attempt
+ *   since the user is watching and can click again.
  * @returns the scrape result, or { skipped: true } if one is already running.
  */
-async function runScrape(source = 'manual') {
+async function runScrape(source = 'manual', { attempts = 1, retryDelayMs = 60000 } = {}) {
   if (scrapeState.running) {
     console.log(`Scrape (${source}) skipped — another run is already in progress`);
     return { skipped: true, reason: 'already running' };
   }
   scrapeState.running = true;
   scrapeState.lastSource = source;
+
+  // Open a run row up front so even a crash mid-scrape leaves a trace
+  let runId = null;
   try {
-    const result = await scrapeAll();
-    scrapeState.lastResult = result;
-    scrapeState.lastError = null;
+    const ins = await pool.query(`INSERT INTO scrape_runs (source) VALUES ($1) RETURNING id`, [source]);
+    runId = ins.rows[0].id;
+  } catch (e) {
+    // DB unavailable — fall back to in-memory status only
+  }
+
+  try {
+    let lastErr = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const result = await scrapeAll();
+        scrapeState.lastResult = result;
+        scrapeState.lastError = null;
+        scrapeState.lastRunAt = new Date().toISOString();
+        if (runId) {
+          await pool.query(
+            `UPDATE scrape_runs SET finished_at = NOW(), total = $1, saved = $2, rescheduled = $3, error = NULL WHERE id = $4`,
+            [result.total ?? null, result.saved ?? null, result.rescheduled ?? null, runId]
+          ).catch(() => {});
+        }
+        return result;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < attempts) {
+          console.warn(`Scrape (${source}) attempt ${attempt}/${attempts} failed: ${err.message} — retrying in ${Math.round(retryDelayMs / 1000)}s`);
+          await sleep(retryDelayMs);
+        }
+      }
+    }
+    scrapeState.lastError = lastErr.message;
     scrapeState.lastRunAt = new Date().toISOString();
-    return result;
-  } catch (err) {
-    scrapeState.lastError = err.message;
-    scrapeState.lastRunAt = new Date().toISOString();
-    throw err;
+    if (runId) {
+      await pool.query(
+        `UPDATE scrape_runs SET finished_at = NOW(), error = $1 WHERE id = $2`,
+        [lastErr.message, runId]
+      ).catch(() => {});
+    }
+    throw lastErr;
   } finally {
     scrapeState.running = false;
   }
 }
 
-function getScrapeStatus() {
+/** Latest run from the DB (survives restarts), falling back to memory. */
+async function getScrapeStatus() {
+  try {
+    const r = await pool.query(`SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1`);
+    if (r.rows.length > 0) {
+      const row = r.rows[0];
+      return {
+        running: scrapeState.running,
+        lastRunAt: row.finished_at || row.started_at,
+        lastResult: row.error || row.finished_at === null
+          ? null
+          : { total: row.total, saved: row.saved, rescheduled: row.rescheduled },
+        lastError: row.error,
+        lastSource: row.source,
+      };
+    }
+  } catch (e) {
+    // table missing / DB down — in-memory state is better than a 500
+  }
   return { ...scrapeState };
 }
 

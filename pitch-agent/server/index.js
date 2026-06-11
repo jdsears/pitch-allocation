@@ -143,7 +143,8 @@ if (cron.validate(SCRAPE_CRON)) {
   cron.schedule(SCRAPE_CRON, async () => {
     console.log('[cron] Daily fixture scrape starting');
     try {
-      const result = await runScrape('scheduled');
+      // FA Full-Time is flaky — retry up to 3 times, a minute apart
+      const result = await runScrape('scheduled', { attempts: 3 });
       console.log('[cron] Daily fixture scrape complete:', JSON.stringify(result));
     } catch (err) {
       console.error('[cron] Daily fixture scrape failed:', err.message);
