@@ -7,6 +7,8 @@ import CalendarView from './components/CalendarView';
 import RefClaimPage from './pages/RefClaimPage';
 import PublicCalendarPage from './pages/PublicCalendarPage';
 import RequestForm from './components/RequestForm';
+import MorleyCrest from './components/MorleyCrest';
+import ThemeToggle from './components/ThemeToggle';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -61,35 +63,42 @@ function Dashboard() {
   return (
     <div className="app">
       <header className="header">
-        <h1>
-          ⚽ <span>Morley YFC</span> Pitch Agent
-        </h1>
-        <nav className="nav">
-          <button
-            className={activeTab === 'overview' ? 'active' : ''}
-            onClick={() => setActiveTab('overview')}
-          >
-            Overview
-          </button>
-          <button
-            className={activeTab === 'grid' ? 'active' : ''}
-            onClick={() => setActiveTab('grid')}
-          >
-            Weekly
-          </button>
-          <button
-            className={activeTab === 'calendar' ? 'active' : ''}
-            onClick={() => setActiveTab('calendar')}
-          >
-            Calendar
-          </button>
-          <button
-            className={activeTab === 'admin' ? 'active' : ''}
-            onClick={() => setActiveTab('admin')}
-          >
-            Admin
-          </button>
-        </nav>
+        <div className="brand">
+          <MorleyCrest size={46} />
+          <div className="brand-text">
+            <h1><span>Morley YFC</span> Pitch Agent</h1>
+            <div className="brand-sub">Morley Youth FC</div>
+          </div>
+        </div>
+        <div className="header-actions">
+          <nav className="nav">
+            <button
+              className={activeTab === 'overview' ? 'active' : ''}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview
+            </button>
+            <button
+              className={activeTab === 'grid' ? 'active' : ''}
+              onClick={() => setActiveTab('grid')}
+            >
+              Weekly
+            </button>
+            <button
+              className={activeTab === 'calendar' ? 'active' : ''}
+              onClick={() => setActiveTab('calendar')}
+            >
+              Calendar
+            </button>
+            <button
+              className={activeTab === 'admin' ? 'active' : ''}
+              onClick={() => setActiveTab('admin')}
+            >
+              Admin
+            </button>
+          </nav>
+          <ThemeToggle />
+        </div>
       </header>
 
       {activeTab === 'overview' && <OverviewGrid />}
