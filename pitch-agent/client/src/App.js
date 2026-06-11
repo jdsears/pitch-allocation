@@ -5,6 +5,7 @@ import AdminPanel from './components/AdminPanel';
 import RefClaimPage from './pages/RefClaimPage';
 import RequestForm from './components/RequestForm';
 import MorleyCrest from './components/MorleyCrest';
+import ThemeToggle from './components/ThemeToggle';
 
 function App() {
   return (
@@ -34,20 +35,23 @@ function Dashboard() {
             <div className="brand-sub">Fixture &amp; Referee Allocation</div>
           </div>
         </div>
-        <nav className="nav">
-          <button
-            className={activeTab === 'grid' ? 'active' : ''}
-            onClick={() => setActiveTab('grid')}
-          >
-            Allocation Grid
-          </button>
-          <button
-            className={activeTab === 'admin' ? 'active' : ''}
-            onClick={() => setActiveTab('admin')}
-          >
-            Admin
-          </button>
-        </nav>
+        <div className="header-actions">
+          <nav className="nav">
+            <button
+              className={activeTab === 'grid' ? 'active' : ''}
+              onClick={() => setActiveTab('grid')}
+            >
+              Allocation Grid
+            </button>
+            <button
+              className={activeTab === 'admin' ? 'active' : ''}
+              onClick={() => setActiveTab('admin')}
+            >
+              Admin
+            </button>
+          </nav>
+          <ThemeToggle />
+        </div>
       </header>
 
       {activeTab === 'grid' && <AllocationGrid isAdmin={true} />}

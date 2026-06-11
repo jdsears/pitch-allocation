@@ -4,21 +4,54 @@
   box-sizing: border-box;
 }
 
+/* =================================================================
+   MORLEY YOUTH FC BRAND COLOURS
+   Single source of truth — drop the club's exact hex codes here and
+   the whole app (both light and dark themes) updates automatically.
+   ================================================================= */
 :root {
-  /* Morley Youth FC brand */
-  --brand-blue: #3e68c7;       /* royal blue (club cover) */
-  --brand-navy: #1b3a78;       /* deep navy (badge lettering) */
-  --brand-yellow: #f6c544;     /* golden yellow (badge disc) */
+  --brand-blue: #3e68c7;       /* royal blue (club cover)        */
+  --brand-navy: #1b3a78;       /* deep navy (badge lettering)    */
+  --brand-yellow: #f6c544;     /* golden yellow (badge disc)     */
   --brand-yellow-soft: #fad867;
+  --radius: 10px;
+}
 
-  --bg-primary: #0e1f47;       /* deep navy app background */
-  --bg-card: #18356f;          /* royal navy card */
+/* ---------- Light theme (default) ---------- */
+:root,
+:root[data-theme='light'] {
+  --bg-primary: #eef2f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f3f6fc;
+  --bg-input: #eef2f9;
+  --text-primary: #15233f;
+  --text-secondary: #4a5a78;
+  --text-muted: #7686a2;
+  --accent: #3e68c7;
+  --accent-hover: #2f53a8;
+  --green: #16a35a;
+  --green-bg: rgba(22, 163, 90, 0.12);
+  --red: #d83a4a;
+  --red-bg: rgba(216, 58, 74, 0.12);
+  --amber: #a9780a;
+  --amber-bg: rgba(246, 197, 68, 0.22);
+  --blue: #2f53a8;
+  --blue-bg: rgba(62, 104, 199, 0.12);
+  --border: #d9e1ef;
+  --wa-text: #e6f4ee;
+  --card-shadow: 0 1px 3px rgba(21, 35, 63, 0.08);
+}
+
+/* ---------- Dark theme ---------- */
+:root[data-theme='dark'] {
+  --bg-primary: #0e1f47;
+  --bg-card: #18356f;
   --bg-card-hover: #1f3f80;
   --bg-input: #21458a;
   --text-primary: #f4f7fd;
   --text-secondary: #b3c4e6;
   --text-muted: #8197c2;
-  --accent: #5b8def;           /* interactive royal blue */
+  --accent: #5b8def;
   --accent-hover: #3e68c7;
   --green: #2ecc71;
   --green-bg: rgba(46, 204, 113, 0.16);
@@ -26,8 +59,11 @@
   --red-bg: rgba(255, 90, 106, 0.16);
   --amber: #f6c544;
   --amber-bg: rgba(246, 197, 68, 0.18);
+  --blue: #9bbcff;
+  --blue-bg: rgba(91, 141, 239, 0.18);
   --border: #2b4c8e;
-  --radius: 10px;
+  --wa-text: #e6f4ee;
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 body {
@@ -103,6 +139,28 @@ body {
   margin-top: 2px;
 }
 
+/* Header actions (nav + theme toggle) */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-toggle {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.theme-toggle:hover { background: rgba(255, 255, 255, 0.22); }
+
 /* Navigation */
 .nav {
   display: flex;
@@ -110,6 +168,14 @@ body {
   background: var(--bg-card);
   padding: 4px;
   border-radius: var(--radius);
+}
+
+/* Header nav sits on the branded gradient — force light-on-dark regardless of theme */
+.header .nav { background: rgba(255, 255, 255, 0.12); }
+.header .nav button { color: rgba(255, 255, 255, 0.82); }
+.header .nav button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .nav button {
@@ -141,6 +207,7 @@ body {
   border: 1px solid var(--border);
   padding: 20px;
   margin-bottom: 16px;
+  box-shadow: var(--card-shadow);
 }
 
 .card-header {
@@ -308,8 +375,8 @@ body {
 .badge-green { background: var(--green-bg); color: var(--green); }
 .badge-red { background: var(--red-bg); color: var(--red); }
 .badge-amber { background: var(--amber-bg); color: var(--amber); }
-.badge-blue { background: rgba(91, 141, 239, 0.18); color: #9bbcff; }
-.badge-yellow { background: var(--amber-bg); color: var(--brand-yellow); }
+.badge-blue { background: var(--blue-bg); color: var(--blue); }
+.badge-yellow { background: var(--amber-bg); color: var(--amber); }
 
 /* Ref claim button */
 .claim-btn {
@@ -360,6 +427,7 @@ body {
 /* WhatsApp preview */
 .wa-preview {
   background: #0b4137;
+  color: var(--wa-text);
   border-radius: var(--radius);
   padding: 16px;
   font-size: 13px;
