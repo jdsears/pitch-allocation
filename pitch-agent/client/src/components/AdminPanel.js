@@ -7,6 +7,8 @@ import {
   importFixtures,
   getRequests,
   updateRequest,
+  scrapeFixtures,
+  getScrapeStatus,
 } from '../utils/api';
 
 export default function AdminPanel() {
@@ -17,6 +19,8 @@ export default function AdminPanel() {
   const [importText, setImportText] = useState('');
   const [toast, setToast] = useState(null);
   const [activeSection, setActiveSection] = useState('referees');
+  const [scrapeStatus, setScrapeStatus] = useState(null);
+  const [scraping, setScraping] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -25,7 +29,33 @@ export default function AdminPanel() {
 
   useEffect(() => {
     loadData();
+    loadScrapeStatus();
   }, []);
+
+  const loadScrapeStatus = async () => {
+    try {
+      const res = await getScrapeStatus();
+      setScrapeStatus(res.data);
+    } catch (err) {
+      /* status endpoint optional — ignore */
+    }
+  };
+
+  const handleScrape = async () => {
+    setScraping(true);
+    try {
+      const res = await scrapeFixtures();
+      if (res.data.skipped) {
+        showToast('A scrape is already running', 'error');
+      } else {
+        showToast(`Scraped ${res.data.total} fixtures (${res.data.saved} saved)`);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Scrape failed — check FA IDs', 'error');
+    }
+    setScraping(false);
+    loadScrapeStatus();
+  };
 
   const loadData = async () => {
     try {
@@ -186,6 +216,38 @@ export default function AdminPanel() {
 
       {/* Import */}
       {activeSection === 'import' && (
+        <>
+        {/* Auto-scrape status + manual trigger */}
+        <div className="card">
+          <div className="card-header">
+            <h2>🔄 FA Full-Time Sync</h2>
+            <button className="btn btn-primary btn-sm" onClick={handleScrape} disabled={scraping || scrapeStatus?.running}>
+              {scraping || scrapeStatus?.running ? '⏳ Scraping…' : 'Scrape now'}
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+            Fixtures sync automatically on a schedule. You can also pull them on demand here.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 13 }}>
+            <span className="badge badge-blue">
+              Last run: {scrapeStatus?.lastRunAt ? new Date(scrapeStatus.lastRunAt).toLocaleString() : 'never'}
+            </span>
+            {scrapeStatus?.lastResult && (
+              <span className="badge badge-green">
+                {scrapeStatus.lastResult.saved} saved / {scrapeStatus.lastResult.total} found
+              </span>
+            )}
+            {scrapeStatus?.source && (
+              <span className="badge badge-yellow">via {scrapeStatus.source}</span>
+            )}
+            {scrapeStatus?.lastError && (
+              <span className="badge badge-red" title={scrapeStatus.lastError}>
+                Last error: {scrapeStatus.lastError.slice(0, 60)}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="card">
           <div className="card-header">
             <h2>📥 Manual Fixture Import</h2>
@@ -219,6 +281,7 @@ export default function AdminPanel() {
             </button>
           </div>
         </div>
+        </>
       )}
 
       {/* Venues */}

@@ -231,11 +231,69 @@ async function scrapeAll() {
   const boys = await scrapeBoysFixtures();
   const girls = await scrapeGirlsFixtures();
   const all = [...boys, ...girls];
-  
+
   console.log(`Total fixtures found: ${all.length} (${boys.length} boys, ${girls.length} girls)`);
-  
+
   const result = await saveFixtures(all);
   return { total: all.length, ...result };
 }
 
-module.exports = { scrapeAll, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures };
+// --- Scrape status + concurrency guard -------------------------------------
+// Shared by the manual "Scrape now" button and the cron scheduler so the two
+// can't trample each other, and the UI can show what last happened.
+let status = {
+  running: false,
+  source: null,        // 'manual' | 'scheduled'
+  lastRunAt: null,
+  lastResult: null,    // { total, saved, skipped }
+  lastError: null,
+  lastDurationMs: null,
+};
+
+function getScrapeStatus() {
+  return { ...status };
+}
+
+/**
+ * Run a scrape with an overlap guard. If one is already in progress, the
+ * caller gets `{ skipped: true }` instead of launching a second browser.
+ */
+async function runScrape(source = 'manual') {
+  if (status.running) {
+    return { skipped: true, reason: 'A scrape is already in progress', status: getScrapeStatus() };
+  }
+
+  status = { ...status, running: true, source, lastError: null };
+  const startedAt = Date.now();
+
+  try {
+    const result = await scrapeAll();
+    status = {
+      ...status,
+      running: false,
+      lastRunAt: new Date().toISOString(),
+      lastResult: result,
+      lastError: null,
+      lastDurationMs: Date.now() - startedAt,
+    };
+    return { ...result, status: getScrapeStatus() };
+  } catch (err) {
+    status = {
+      ...status,
+      running: false,
+      lastRunAt: new Date().toISOString(),
+      lastError: err.message,
+      lastDurationMs: Date.now() - startedAt,
+    };
+    throw err;
+  }
+}
+
+module.exports = {
+  scrapeAll,
+  runScrape,
+  getScrapeStatus,
+  scrapeBoysFixtures,
+  scrapeGirlsFixtures,
+  saveFixtures,
+};

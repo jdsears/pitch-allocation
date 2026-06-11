@@ -7,6 +7,7 @@ const fixtureRoutes = require('./routes/fixtures');
 const allocationRoutes = require('./routes/allocations');
 const refereeRoutes = require('./routes/referees');
 const generalRoutes = require('./routes/general');
+const { startScheduler } = require('./services/scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,8 @@ if (process.env.NODE_ENV === 'production') {
 
 app.listen(PORT, () => {
   console.log(`Morley Pitch Agent running on port ${PORT}`);
+  // Kick off scheduled fixture scraping (no-op if unconfigured / disabled)
+  startScheduler();
 });
 
 module.exports = app;

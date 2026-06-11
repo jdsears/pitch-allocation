@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
-const { scrapeAll } = require('../services/scraper');
+const { runScrape, getScrapeStatus } = require('../services/scraper');
 
 // GET /api/fixtures - list fixtures with optional filters
 router.get('/', async (req, res) => {
@@ -35,15 +35,23 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/fixtures/scrape - trigger fixture scraping
+// POST /api/fixtures/scrape - trigger fixture scraping (manual)
 router.post('/scrape', async (req, res) => {
   try {
-    console.log('Scrape triggered');
-    const result = await scrapeAll();
+    console.log('Scrape triggered (manual)');
+    const result = await runScrape('manual');
+    if (result.skipped) {
+      return res.status(409).json({ success: false, ...result });
+    }
     res.json({ success: true, ...result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, status: getScrapeStatus() });
   }
+});
+
+// GET /api/fixtures/scrape/status - last run, in-progress flag, errors
+router.get('/scrape/status', (req, res) => {
+  res.json(getScrapeStatus());
 });
 
 // POST /api/fixtures/import - manually import fixtures (for when scraper can't reach FA)
