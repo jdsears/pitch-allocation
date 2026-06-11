@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const cron = require('node-cron');
 const { runScrape } = require('./services/scraper');
+const { requireAdmin, requireAdminForMutations, login, verifyToken, authEnabled } = require('./middleware/auth');
 
 const fixtureRoutes = require('./routes/fixtures');
 const allocationRoutes = require('./routes/allocations');
@@ -23,8 +24,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Admin auth: exchange the shared password for a bearer token
+app.post('/api/auth/login', (req, res) => {
+  if (!authEnabled()) return res.json({ token: null, required: false });
+  const token = login(req.body?.password);
+  if (!token) return res.status(401).json({ error: 'Wrong password' });
+  res.json({ token, required: true });
+});
+
+// Admin auth: is auth on, and is the caller's token valid?
+app.get('/api/auth/status', (req, res) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  res.json({ required: authEnabled(), ok: verifyToken(token) });
+});
+
 // One-time database setup endpoint (migrate + seed)
-app.post('/api/setup', async (req, res) => {
+app.post('/api/setup', requireAdmin, async (req, res) => {
   const pool = require('./db/pool');
   const client = await pool.connect();
   try {
@@ -144,11 +160,13 @@ app.post('/api/setup', async (req, res) => {
   }
 })();
 
-// API Routes
-app.use('/api/fixtures', fixtureRoutes);
-app.use('/api/allocations', allocationRoutes);
+// API Routes. Reads stay open (refs/parents view the grid); mutations need
+// admin auth — except referee claim/availability and the public request
+// form, which keep their own selective guards inside their route files.
+app.use('/api/fixtures', requireAdminForMutations, fixtureRoutes);
+app.use('/api/allocations', requireAdminForMutations, allocationRoutes);
 app.use('/api/referees', refereeRoutes);
-app.use('/api/teams', teamRoutes);
+app.use('/api/teams', requireAdminForMutations, teamRoutes);
 app.use('/api', generalRoutes);
 
 // Serve React build in production

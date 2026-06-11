@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { getAuthStatus, adminLogin, setAdminToken } from './utils/api';
 import AllocationGrid from './components/AllocationGrid';
 import OverviewGrid from './components/OverviewGrid';
 import AdminPanel from './components/AdminPanel';
@@ -57,8 +58,69 @@ function App() {
   );
 }
 
+function AdminLogin({ onLoggedIn }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await adminLogin(password);
+      setAdminToken(res.data.token);
+      onLoggedIn();
+    } catch (err) {
+      setError(err.response?.status === 401 ? 'Wrong password' : 'Login failed — try again');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="card" style={{ maxWidth: 380, margin: '60px auto' }}>
+      <div className="card-header"><h2>🔒 Admin login</h2></div>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
+        Enter the club admin password to manage fixtures, teams and allocations.
+      </p>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <input
+          type="password"
+          autoFocus
+          placeholder="Admin password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+        {error && <div style={{ color: 'var(--red)', fontSize: 13 }}>{error}</div>}
+        <button type="submit" className="btn btn-primary" disabled={busy || !password}>
+          {busy ? 'Checking…' : 'Log in'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  // null = checking, true/false = resolved. If the server has no
+  // ADMIN_PASSWORD set, auth is not required and everyone is admin.
+  const [isAdmin, setIsAdmin] = useState(null);
+
+  const checkAuth = async () => {
+    try {
+      const res = await getAuthStatus();
+      setIsAdmin(!res.data.required || res.data.ok);
+    } catch (err) {
+      // If the status endpoint is unreachable, fail open for read-only
+      // views; admin actions will still be rejected server-side.
+      setIsAdmin(false);
+    }
+  };
+
+  useEffect(() => { checkAuth(); }, []);
+
+  const adminGated = (component) =>
+    isAdmin === null ? null : isAdmin ? component : <AdminLogin onLoggedIn={checkAuth} />;
 
   return (
     <div className="app">
@@ -102,9 +164,9 @@ function Dashboard() {
       </header>
 
       {activeTab === 'overview' && <OverviewGrid />}
-      {activeTab === 'grid' && <AllocationGrid isAdmin={true} />}
+      {activeTab === 'grid' && <AllocationGrid isAdmin={!!isAdmin} />}
       {activeTab === 'calendar' && <CalendarView />}
-      {activeTab === 'admin' && <AdminPanel />}
+      {activeTab === 'admin' && adminGated(<AdminPanel />)}
     </div>
   );
 }
