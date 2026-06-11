@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pitch-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Server syntax check
+        run: |
+          for f in $(find server -name '*.js' -not -path '*/node_modules/*'); do
+            node --check "$f"
+          done
+
+      - name: Allocator behaviour tests
+        run: node --test server/tests/*.test.js
+
+      - name: Client build
+        working-directory: pitch-agent/client
+        run: |
+          npm ci
+          CI=false npm run build
