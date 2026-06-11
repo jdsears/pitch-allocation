@@ -191,12 +191,14 @@ async function allocateFixtures(weekStartDate) {
 
     console.log(`Available pitches: ${pitches.rows.map(p => `${p.venue_name} ${p.name} (${p.format})`).join(', ')}`);
 
-    // Active managed teams, keyed by lowercased name, for per-team overrides
-    // (explicit format exception + default camera). Venue is left to the
-    // age-based pitch restrictions above, which already steer U13/14 vs U15+.
+    // Active managed teams, keyed by lowercased name, for per-team overrides:
+    // explicit format exception, default camera, and home-venue preference.
+    // A home-venue preference is tried first (Phase 0) and also overrides the
+    // age-based pitch restrictions at that venue — e.g. a U14 side set to
+    // Morley may use its full-size pitch instead of going to Shropham.
     const teamMap = {};
     try {
-      const teamRows = await client.query(`SELECT name, format, default_camera FROM teams WHERE active = true`);
+      const teamRows = await client.query(`SELECT name, format, default_camera, home_venue_id FROM teams WHERE active = true`);
       for (const t of teamRows.rows) teamMap[(t.name || '').trim().toLowerCase()] = t;
     } catch (e) {
       // teams table/columns may not exist on a fresh DB — overrides just don't apply
@@ -274,6 +276,11 @@ async function allocateFixtures(weekStartDate) {
 
         // Helper: check if a fixture's age group fits a pitch's age restrictions
         const fitsPitch = (fixture, pitch) => {
+          // An explicit team home-venue preference overrides age restrictions
+          // at that venue (e.g. a U14 side set to Morley may use its full-size
+          // pitch rather than being forced to Shropham)
+          const team = teamFor(fixture.home_team);
+          if (team && team.home_venue_id && team.home_venue_id === pitch.venue_id) return true;
           const fixtureAge = ageGroupNumber(fixture.age_group);
           if (!fixtureAge) return true; // can't determine age, allow
           if (pitch.max_age_group) {
@@ -337,9 +344,61 @@ async function allocateFixtures(weekStartDate) {
           remaining = overflow;
         }
 
+        remaining = [...remaining, ...fitsRestricted];
+
+        // Phase 1.5: home-venue preference. Teams with an explicit home venue
+        // set in Team management get first pick of that venue's matching
+        // pitches (the preference also lifts age limits there — see fitsPitch,
+        // e.g. a U14 side set to Morley may use its full-size pitch). This
+        // runs AFTER Phase 1 so fixtures with no alternative venue are never
+        // starved of their only slots; if the preferred venue is full the
+        // fixture falls through to the normal flow below.
+        let withPref = remaining.filter(f => {
+          const t = teamFor(f.home_team);
+          return t && t.home_venue_id && allMatchingPitches.some(p => p.venue_id === t.home_venue_id);
+        });
+        if (withPref.length > 0) {
+          remaining = remaining.filter(f => !withPref.includes(f));
+          for (const pitch of allMatchingPitches) {
+            if (withPref.length === 0) break;
+            const eligible = withPref.filter(f => teamFor(f.home_team).home_venue_id === pitch.venue_id);
+            if (eligible.length === 0) continue;
+            if (!occupiedSlots[pitch.id]) occupiedSlots[pitch.id] = [];
+
+            const daySlots = await getSlotsForPitchDay(pitch.id, dayOfWeek);
+            console.log(`  Phase 1.5: ${pitch.venue_name} ${pitch.name} (id=${pitch.id}) — home-venue preference for ${eligible.length} fixture(s), ${dayOfWeek} slots: ${daySlots.join(', ') || 'NONE'}`);
+            if (daySlots.length === 0) continue;
+
+            const { allocated, overflow } = await allocateWithRotation(
+              eligible, pitch.id, daySlots, occupiedSlots[pitch.id], date, client
+            );
+
+            for (const { fixture, kickOff } of allocated) {
+              const result = await client.query(
+                `INSERT INTO allocations (fixture_id, pitch_id, allocated_kick_off, status, week_start)
+                 VALUES ($1, $2, $3, 'draft', $4) RETURNING id`,
+                [fixture.id, pitch.id, kickOff, weekStart]
+              );
+
+              await client.query(
+                `INSERT INTO allocation_history (team_name, pitch_id, kick_off, match_date)
+                 VALUES ($1, $2, $3, $4)`,
+                [fixture.home_team, pitch.id, kickOff, date]
+              );
+
+              occupiedSlots[pitch.id].push(kickOff);
+              allAllocations.push({ id: result.rows[0].id, fixture, pitch, kick_off: kickOff });
+            }
+
+            withPref = [...overflow, ...withPref.filter(f => !eligible.includes(f))];
+          }
+          // Preference couldn't be honoured (venue full / no slots) — the
+          // normal flow below places these fixtures anywhere suitable
+          remaining = [...remaining, ...withPref];
+        }
+
         // Phase 2: Allocate fixtures that fit restricted pitches (e.g. U13/U14 → Shropham OK)
         // Try restricted pitches first, then overflow to unrestricted
-        remaining = [...remaining, ...fitsRestricted];
 
         for (const pitch of [...restrictedPitches, ...unrestrictedPitches]) {
           if (remaining.length === 0) break;
@@ -425,8 +484,9 @@ async function getAllocationGrid(weekStartDate) {
   const weekEnd = format(addDays(new Date(weekStart), 6), 'yyyy-MM-dd');
 
   const result = await pool.query(
-    `SELECT 
+    `SELECT
        a.id as allocation_id,
+       a.pitch_id,
        a.allocated_kick_off,
        a.status,
        a.camera,
@@ -471,6 +531,7 @@ async function getAllocationGrid(weekStartDate) {
 
     grid[venue][pitch][date].push({
       allocation_id: row.allocation_id,
+      pitch_id: row.pitch_id,
       kick_off: row.allocated_kick_off,
       home_team: row.home_team,
       away_team: row.away_team,

@@ -11,6 +11,7 @@ import {
   deleteAllocation,
   deleteFixture,
   getReferees,
+  getVenues,
   claimMatch,
   unclaimMatch,
 } from '../utils/api';
@@ -31,6 +32,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [conflicts, setConflicts] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
+  const [pitchOptions, setPitchOptions] = useState([]);
   const [editingFixtureId, setEditingFixtureId] = useState(null);
   const [editFixtureData, setEditFixtureData] = useState({});
 
@@ -43,14 +45,21 @@ export default function AllocationGrid({ isAdmin = false }) {
     setLoading(true);
     try {
       const weekEndDate = format(addDays(new Date(weekDate), 6), 'yyyy-MM-dd');
-      const [gridRes, summaryRes, refsRes] = await Promise.all([
+      const [gridRes, summaryRes, refsRes, venuesRes] = await Promise.all([
         getAllocationGrid(weekDate),
         getAllocationSummary(weekDate),
         getReferees(),
+        getVenues(),
       ]);
       setGrid(gridRes.data);
       setSummary(summaryRes.data);
       setReferees(refsRes.data);
+      // Flat pitch list for the "move to another pitch" selector
+      setPitchOptions(
+        (venuesRes.data || []).flatMap(v =>
+          (v.pitches || []).map(p => ({ id: p.id, label: `${v.name} — ${p.name} (${p.format})` }))
+        )
+      );
       // Fetch fixtures separately so a failure doesn't blank the whole page
       try {
         const fixturesRes = await getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' });
@@ -104,6 +113,7 @@ export default function AllocationGrid({ isAdmin = false }) {
       allocated_kick_off: allocation.kick_off?.substring(0, 5),
       camera: allocation.camera || '',
       notes: allocation.notes || '',
+      pitch_id: allocation.pitch_id,
     });
   };
 
@@ -472,15 +482,29 @@ export default function AllocationGrid({ isAdmin = false }) {
                                   </td>
                                   <td>
                                     {editingId === a.allocation_id ? (
-                                      <select
-                                        value={editData.allocated_kick_off}
-                                        onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
-                                        style={{ width: 80 }}
-                                      >
-                                        {['10:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
-                                          <option key={t} value={t}>{t}</option>
-                                        ))}
-                                      </select>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <select
+                                          value={editData.allocated_kick_off}
+                                          onChange={(e) => setEditData({ ...editData, allocated_kick_off: e.target.value })}
+                                          style={{ width: 80 }}
+                                        >
+                                          {['10:00', '11:15', '12:00', '12:30', '14:00'].map((t) => (
+                                            <option key={t} value={t}>{t}</option>
+                                          ))}
+                                        </select>
+                                        {pitchOptions.length > 0 && (
+                                          <select
+                                            value={editData.pitch_id || ''}
+                                            onChange={(e) => setEditData({ ...editData, pitch_id: Number(e.target.value) })}
+                                            style={{ maxWidth: 180 }}
+                                            title="Move to another pitch/venue"
+                                          >
+                                            {pitchOptions.map((p) => (
+                                              <option key={p.id} value={p.id}>{p.label}</option>
+                                            ))}
+                                          </select>
+                                        )}
+                                      </div>
                                     ) : (
                                       <strong>{a.kick_off?.substring(0, 5)}</strong>
                                     )}
