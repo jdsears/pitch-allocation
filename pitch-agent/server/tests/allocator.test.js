@@ -19,11 +19,13 @@ const PITCHES = [
   { id: 10, venue_id: VENUE_MORLEY, name: '11v11', format: '11v11', min_age_group: 'U15', max_age_group: null, venue_name: 'Morley' },
   { id: 20, venue_id: VENUE_SHROPHAM, name: '11v11', format: '11v11', min_age_group: null, max_age_group: 'U14', venue_name: 'Shropham' },
   { id: 30, venue_id: VENUE_MORLEY, name: '7v7 (Main)', format: '7v7', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
+  { id: 40, venue_id: VENUE_MORLEY, name: '3v3', format: '3v3', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
 ];
 const SLOTS = {
   10: ['10:00:00', '12:30:00'],
   20: ['10:00:00', '12:00:00', '14:00:00'],
   30: ['10:00:00', '11:15:00'],
+  40: ['10:00:00', '11:15:00', '12:30:00'],
 };
 
 // Mutable per-test state the fake pool serves from
@@ -121,6 +123,15 @@ test('team format exception is respected', async () => {
   const res = await allocateFixtures(WEEK);
   assert.equal(res.allocated, 1);
   assert.equal(state.inserted[0].pitch_id, 20, 'U12 with 11v11 exception lands on an 11v11 pitch');
+});
+
+test('U6/U7 mini-soccer goes to the 3v3 pitch', async () => {
+  reset({
+    fixtures: [fix(1, 'Morley YFC U6 Cubs', 'U6', '3v3'), fix(2, 'Morley YFC U7 Tigers', 'U7', '3v3')],
+  });
+  const res = await allocateFixtures(WEEK);
+  assert.equal(res.allocated, 2);
+  assert.ok(state.inserted.every(i => i.pitch_id === 40), 'both land on the Morley 3v3 pitch');
 });
 
 test('kick-off rotation: last week\'s early team goes later', async () => {

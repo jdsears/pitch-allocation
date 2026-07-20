@@ -5,7 +5,7 @@ Automated pitch allocation system for Morley Youth Football Club. Replaces manua
 ## What It Does
 
 1. **Fetches fixtures** from FA Full-Time (boys and girls, both filtered by club ID)
-2. **Auto-allocates** home games to pitches based on format (5v5/7v7/9v9/11v11)
+2. **Auto-allocates** home games to pitches based on format (3v3/5v5/7v7/9v9/11v11)
 3. **Rotates kick-off times** so teams sharing a pitch get fair slot rotation
 4. **Publishes** a summary to WhatsApp with a link to the live grid
 5. **Referees claim matches** via a mobile-friendly web page
@@ -167,7 +167,7 @@ morley-pitch-agent/
 - **Shropham Saturday** (U12B): KO slots at 10:00, 12:00, 14:00
 - **Shropham Sunday** (boys): KO slots at 10:00, 12:00, 14:00
 - **Rotation:** Each team takes turns getting the 10am slot. If Team A had 10:00 last week and Team B had 11:15, this week Team B gets 10:00 and Team A gets 11:15
-- **Format mapping:** U6-U8 → 5v5, U9-U10 → 7v7, U11-U12 → 9v9, U13+ → 11v11
+- **Format mapping:** U6-U7 → 3v3, U8 → 5v5, U9-U10 → 7v7, U11-U12 → 9v9, U13+ → 11v11
 - **Single ref pool** covering all matches across both days
 
 ## Manual Fixture Import

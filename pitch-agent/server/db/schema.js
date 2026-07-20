@@ -67,6 +67,34 @@ async function ensureSchema(q) {
      WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
      AND format = '11v11' AND min_age_group IS NULL`
   );
+
+  // 3v3 pitch at Morley for U6/U7 mini-soccer (added mid-season, so existing
+  // deployments pick it up here — the /api/setup seed only runs once).
+  // No-ops until the Morley venue exists; safe to re-run.
+  const morley = await q.query(`SELECT id FROM venues WHERE name = 'Morley' LIMIT 1`);
+  if (morley.rows.length > 0) {
+    const morleyId = morley.rows[0].id;
+    await q.query(
+      `INSERT INTO pitches (venue_id, name, format) VALUES ($1, '3v3', '3v3')
+       ON CONFLICT (venue_id, name) DO NOTHING`,
+      [morleyId]
+    );
+    const p3 = await q.query(`SELECT id FROM pitches WHERE venue_id = $1 AND name = '3v3'`, [morleyId]);
+    if (p3.rows.length > 0) {
+      // Same slot pattern as the other Morley pitches
+      const slots = [
+        ['10:00', 'Saturday'], ['11:15', 'Saturday'], ['12:30', 'Saturday'],
+        ['10:00', 'Sunday'], ['12:30', 'Sunday'],
+      ];
+      for (const [ko, day] of slots) {
+        await q.query(
+          `INSERT INTO time_slots (pitch_id, kick_off, day_of_week) VALUES ($1, $2, $3)
+           ON CONFLICT (pitch_id, kick_off, day_of_week) DO NOTHING`,
+          [p3.rows[0].id, ko, day]
+        );
+      }
+    }
+  }
 }
 
 module.exports = { ensureSchema };

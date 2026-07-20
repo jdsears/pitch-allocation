@@ -174,6 +174,7 @@ export default function TeamsSection({ venues, showToast }) {
               style={{ flex: '1 1 110px' }}
             >
               <option value="">Format (auto)</option>
+              <option value="3v3">3v3</option>
               <option value="5v5">5v5</option>
               <option value="7v7">7v7</option>
               <option value="9v9">9v9</option>
