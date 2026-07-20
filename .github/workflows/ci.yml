@@ -11,11 +11,19 @@ jobs:
     defaults:
       run:
         working-directory: pitch-agent
+    env:
+      # Tests stub the browser; skip the ~150MB Chromium download
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            pitch-agent/package-lock.json
+            pitch-agent/client/package-lock.json
 
       - name: Server syntax check
         run: |
@@ -23,7 +31,10 @@ jobs:
             node --check "$f"
           done
 
-      - name: Allocator behaviour tests
+      - name: Install server dependencies
+        run: npm ci
+
+      - name: Allocator + proxy behaviour tests
         run: node --test server/tests/*.test.js
 
       - name: Client build
