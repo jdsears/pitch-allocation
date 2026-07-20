@@ -5,6 +5,8 @@
  * accessible), scrape fixtures, and POST them to the Railway API.
  */
 
+const { AGE_TO_FORMAT, GIRLS_AGE_TO_FORMAT } = require('../lib/formats');
+
 const BOYS_SEASON_ID = '353505162';
 const BOYS_CLUB_ID = '926960945';
 const GIRLS_SEASON_ID = '199649392';
@@ -30,13 +32,8 @@ let API_URL = ${JSON.stringify(apiUrl)};
 const BOYS_URL = ${JSON.stringify(boysUrl)};
 const GIRLS_URL = ${JSON.stringify(girlsUrl)};
 
-const AGE_TO_FORMAT = {
-  U6:'3v3',U7:'3v3',U8:'5v5',U9:'7v7',U10:'7v7',
-  U11:'9v9',U12:'9v9',U13:'11v11',U14:'11v11',U15:'11v11',
-  U16:'11v11',U17:'11v11',U18:'11v11'
-};
-// Girls formats one year later (NWGFL): U9 5v5, U11 7v7, U13/U14 9v9
-const GIRLS_AGE_TO_FORMAT = {...AGE_TO_FORMAT,U9:'5v5',U11:'7v7',U13:'9v9',U14:'9v9'};
+const AGE_TO_FORMAT = ${JSON.stringify(AGE_TO_FORMAT)};
+const GIRLS_AGE_TO_FORMAT = ${JSON.stringify(GIRLS_AGE_TO_FORMAT)};
 
 function extractAgeGroup(t){const m=t.match(/U(\\d+)/i);return m?'U'+m[1]:null;}
 function getFormat(a,g){const m=g==='girls'?GIRLS_AGE_TO_FORMAT:AGE_TO_FORMAT;return m[a]||'11v11';}

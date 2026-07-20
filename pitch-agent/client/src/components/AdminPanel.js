@@ -88,7 +88,7 @@ function FixtureCard({ row, onChange, onRemove, index, showRemove }) {
             onChange={e => onChange(index, 'age_group', e.target.value)}
             style={selectStyle}
           >
-            {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+            {['U5','U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
               <option key={ag} value={ag}>{ag}</option>
             ))}
           </select>
@@ -182,7 +182,7 @@ export default function AdminPanel() {
 
   const handleImport = async () => {
     try {
-      const boysFormatMap = { U6: '3v3', U7: '3v3', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
+      const boysFormatMap = { U5: '3v3', U6: '3v3', U7: '3v3', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
       const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
 
       const valid = manualRows.filter(r => r.match_date && r.home_team && r.away_team);
@@ -631,7 +631,7 @@ export default function AdminPanel() {
                             onChange={e => setApproveFixture({ ...approveFixture, age_group: e.target.value })}
                             style={selectStyle}
                           >
-                            {['U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
+                            {['U5','U6','U7','U8','U9','U10','U11','U12','U13','U14','U15','U16','U17','U18'].map(ag => (
                               <option key={ag} value={ag}>{ag}</option>
                             ))}
                           </select>
