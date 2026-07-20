@@ -399,7 +399,7 @@ export default function AllocationGrid({ isAdmin = false }) {
                             onChange={(e) => setEditFixtureData({ ...editFixtureData, format: e.target.value })}
                             style={{ width: 80, fontSize: 12 }}
                           >
-                            {['5v5', '7v7', '9v9', '11v11'].map((fmt) => (
+                            {['3v3', '5v5', '7v7', '9v9', '11v11'].map((fmt) => (
                               <option key={fmt} value={fmt}>{fmt}</option>
                             ))}
                           </select>

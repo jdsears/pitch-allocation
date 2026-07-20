@@ -57,6 +57,7 @@ app.post('/api/setup', requireAdmin, async (req, res) => {
     const shrophamId = shropham.rows[0]?.id || (await client.query(`SELECT id FROM venues WHERE name = 'Shropham'`)).rows[0].id;
 
     const pitches = [
+      { name: '3v3', format: '3v3', venue: morleyId },
       { name: '5v5 (Main)', format: '5v5', venue: morleyId },
       { name: '7v7 (Main)', format: '7v7', venue: morleyId },
       { name: '11v11', format: '11v11', venue: morleyId },
