@@ -2,12 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 
-// Age group -> default pitch format (kept in step with the scraper's mapping)
-const AGE_TO_FORMAT = {
-  U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7',
-  U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
-  U16: '11v11', U17: '11v11', U18: '11v11',
-};
+const { AGE_TO_FORMAT } = require('../lib/formats');
 const formatForAge = (age) => AGE_TO_FORMAT[age] || '11v11';
 const ageNumber = (age) => {
   const m = (age || '').match(/U(\d+)/i);

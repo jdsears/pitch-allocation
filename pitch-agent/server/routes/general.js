@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdmin } = require('../middleware/auth');
+const { AGE_TO_FORMAT, GIRLS_AGE_TO_FORMAT } = require('../lib/formats');
 
 // --- VENUES & PITCHES ---
 
@@ -72,10 +73,8 @@ router.put('/requests/:id', requireAdmin, async (req, res) => {
 
     let createdFixture = null;
     if (status === 'approved' && fixture) {
-      const boysFormatMap = { U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
-      const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
       const gender = fixture.gender || 'boys';
-      const formatMap = gender === 'girls' ? girlsFormatMap : boysFormatMap;
+      const formatMap = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
       // Allow explicit format override (e.g. teams booking friendlies for next season's format)
       const hasOverride = !!fixture.format_override;
       const format = fixture.format_override || formatMap[fixture.age_group] || fixture.pitch_format || '11v11';

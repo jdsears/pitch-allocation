@@ -6,19 +6,7 @@ const { runScrape, getScrapeStatus, debugScrape } = require('../services/scraper
 const { generateMacScript, generateWindowsScript } = require('../services/scrapeScriptGenerator');
 const { parseFixturesFromImage } = require('../services/ocrFixtureParser');
 
-// Canonical format mapping — single source of truth for server-side validation
-const AGE_TO_FORMAT = {
-  U6: '5v5', U7: '5v5', U8: '5v5', U9: '7v7', U10: '7v7',
-  U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
-  U16: '11v11', U17: '11v11', U18: '11v11'
-};
-const GIRLS_AGE_TO_FORMAT = {
-  ...AGE_TO_FORMAT, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9'
-};
-function computeFormat(ageGroup, gender) {
-  const map = gender === 'girls' ? GIRLS_AGE_TO_FORMAT : AGE_TO_FORMAT;
-  return map[ageGroup] || '11v11';
-}
+const { computeFormat } = require('../lib/formats');
 
 // Multer config: accept images up to 10MB in memory
 const upload = multer({
