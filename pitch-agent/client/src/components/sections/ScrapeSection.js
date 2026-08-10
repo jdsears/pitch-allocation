@@ -94,14 +94,24 @@ export default function ScrapeSection({ showToast }) {
                 (copy selectedSeason from the FullTime fixtures URL).
               </p>
             )}
-            {scrapeStatus?.lastError && (
+            {scrapeStatus?.lastError && /TUNNEL|PROXY/i.test(String(scrapeStatus.lastError)) ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
+                The scrape couldn't connect <strong>through the proxy</strong> (this is a proxy
+                problem, not FA blocking). Check, in order: ① the proxy account's traffic
+                balance hasn't run out, ② credentials in SCRAPE_PROXY still match the provider
+                dashboard, ③ if the proxy username/password targets a specific city, remove the
+                city part (small city pools can be empty) and keep just the country. The daily
+                06:00 run retries 3× automatically; the downloadable script below works without
+                the proxy in the meantime.
+              </p>
+            ) : scrapeStatus?.lastError ? (
               <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
                 A timeout usually means FA Full-Time is blocking the cloud server's IP. Set a
                 <code style={{ background: 'var(--bg-primary)', padding: '1px 5px', borderRadius: 4, margin: '0 4px' }}>SCRAPE_PROXY</code>
                 (UK/residential proxy — see README) to fix the automatic scrape, or use the
                 downloadable script below in the meantime.
               </p>
-            )}
+            ) : null}
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
