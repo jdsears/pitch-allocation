@@ -104,6 +104,16 @@ async function launchBrowser() {
   return puppeteer.launch(launchOptions);
 }
 
+// Connection-class failures that a rotating proxy throws intermittently —
+// they fail within seconds, so a quick retry usually succeeds. Slow
+// navigation timeouts (FA blocking) are NOT retried here; each attempt
+// would burn 90s for nothing.
+const TRANSIENT_NAV_ERROR = /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_CONNECTION_(RESET|REFUSED|CLOSED)|ERR_EMPTY_RESPONSE|ERR_SOCKS_CONNECTION_FAILED/;
+
+function isTransientNavError(message) {
+  return TRANSIENT_NAV_ERROR.test(String(message || ''));
+}
+
 // Fetch the fully-rendered HTML from a URL using Puppeteer
 async function fetchRenderedHTML(url) {
   let browser;
@@ -129,7 +139,22 @@ async function fetchRenderedHTML(url) {
     // FA Full-Time does client-side redirects after initial load.
     // Use 'load' event which waits for initial page + subresources,
     // then wait for any subsequent navigation to settle.
-    await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+    // Rotating proxies intermittently fail the CONNECT tunnel — those
+    // errors surface in seconds, so retry them a couple of times rather
+    // than failing the whole scrape on one blip.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+        break;
+      } catch (err) {
+        if (attempt < 3 && isTransientNavError(err.message)) {
+          console.warn(`Connection blip (attempt ${attempt}/3): ${err.message.slice(0, 80)} — retrying in 5s`);
+          await new Promise(r => setTimeout(r, 5000));
+          continue;
+        }
+        throw err;
+      }
+    }
     console.log(`Page loaded. Current URL: ${page.url()}`);
 
     // Wait for any client-side redirect to complete
@@ -621,4 +646,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures };
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError };
