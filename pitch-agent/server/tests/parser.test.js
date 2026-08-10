@@ -105,3 +105,13 @@ test('still parses the legacy classed markup', () => {
   assert.equal(fixtures[0].match_date, '2026-03-21');
   assert.equal(fixtures[0].is_home_game, true);
 });
+
+test('transient proxy errors are recognised for retry; slow timeouts are not', () => {
+  const { isTransientNavError } = require('../services/scraper');
+  assert.ok(isTransientNavError('net::ERR_TUNNEL_CONNECTION_FAILED at https://fulltime.thefa.com/...'));
+  assert.ok(isTransientNavError('net::ERR_PROXY_CONNECTION_FAILED'));
+  assert.ok(isTransientNavError('net::ERR_CONNECTION_RESET'));
+  // FA blocking shows as a slow navigation timeout — retrying burns 90s per attempt
+  assert.ok(!isTransientNavError('Navigation timeout of 90000 ms exceeded'));
+  assert.ok(!isTransientNavError(''));
+});
