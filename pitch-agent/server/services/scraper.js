@@ -175,15 +175,24 @@ function parseFixtures(html, gender = 'boys') {
   const $ = cheerio.load(html);
   const fixtures = [];
 
-  // Try the known FA Full-Time table class first, then fall back
+  // Try the known FA Full-Time table class first, then fall back.
+  // 2026/27 note: FA dropped the table's class AND separates cell text with
+  // tabs/newlines, so a literal ' VS ' (space-delimited) match finds nothing.
+  // The robust fallback is: any row with a cell whose trimmed text is VS/V.
   let rows;
   if ($('.League-Results_Table tr').length > 0) {
     rows = $('.League-Results_Table tr');
     console.log(`Using .League-Results_Table selector, found ${rows.length} rows`);
   } else {
-    // Fallback: find any table that contains "VS" text
     rows = $('tr').filter((i, row) => {
-      const text = $(row).text();
+      let hasVsCell = false;
+      $(row).find('td').each((j, cell) => {
+        const t = $(cell).text().trim().toUpperCase();
+        if (t === 'VS' || t === 'V') hasVsCell = true;
+      });
+      if (hasVsCell) return true;
+      // Legacy fallback: whitespace-normalised text containing " VS "
+      const text = $(row).text().replace(/\s+/g, ' ');
       return text.includes(' VS ') || text.includes(' v ') || text.includes(' vs ');
     });
     console.log(`Using fallback VS-filter, found ${rows.length} rows`);
@@ -612,4 +621,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy };
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures };

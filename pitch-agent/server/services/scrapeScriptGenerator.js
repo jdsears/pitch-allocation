@@ -117,7 +117,7 @@ function parseFixtures(html,label){
   if(lrtRows>0){rows=$('.League-Results_Table tr');}
   else{
     // Strategy 2: any tr containing VS
-    const vsRows=$('tr').filter((i,row)=>{const t=$(row).text();return t.includes(' VS ')||t.includes(' v ')||t.includes(' vs ');});
+    const vsRows=$('tr').filter((i,row)=>{let vc=false;$(row).find('td').each((j,c)=>{const ct=$(c).text().trim().toUpperCase();if(ct==='VS'||ct==='V')vc=true;});if(vc)return true;const t=$(row).text().replace(/\\s+/g,' ');return t.includes(' VS ')||t.includes(' v ')||t.includes(' vs ');});
     console.log('Strategy 2 - TR with VS: '+vsRows.length+' rows');
     if(vsRows.length>0){rows=vsRows;}
     else{
