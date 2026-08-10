@@ -7,10 +7,13 @@
 
 const { AGE_TO_FORMAT, GIRLS_AGE_TO_FORMAT } = require('../lib/formats');
 
-const BOYS_SEASON_ID = '353505162';
-const BOYS_CLUB_ID = '926960945';
-const GIRLS_SEASON_ID = '199649392';
-const GIRLS_CLUB_ID = '468454775';
+// FA Full-Time issues a NEW season ID every season (club IDs stay stable).
+// Read from the same env vars as the server scrape so a single Railway
+// update at season rollover fixes both paths; defaults are 2026/27.
+const BOYS_SEASON_ID = process.env.FA_BOYS_SEASON_ID || '784068851';
+const BOYS_CLUB_ID = process.env.FA_BOYS_CLUB_ID || '926960945';
+const GIRLS_SEASON_ID = process.env.FA_GIRLS_SEASON_ID || '199649392';
+const GIRLS_CLUB_ID = process.env.FA_GIRLS_CLUB_ID || '468454775';
 
 function buildFixtureUrl(seasonId, clubId) {
   return `https://fulltime.thefa.com/fixtures.html?selectedSeason=${seasonId}&selectedFixtureGroupAgeGroup=0&selectedFixtureGroupKey=&selectedDateCode=all&selectedClub=${clubId}&selectedTeam=&selectedRelatedFixtureOption=3&selectedFixtureDateStatus=&selectedFixtureStatus=&previousSelectedFixtureGroupAgeGroup=0&previousSelectedFixtureGroupKey=&previousSelectedClub=${clubId}&itemsPerPage=100`;
