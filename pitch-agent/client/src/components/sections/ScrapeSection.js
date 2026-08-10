@@ -86,6 +86,14 @@ export default function ScrapeSection({ showToast }) {
                 </span>
               )}
             </div>
+            {scrapeStatus?.lastResult && scrapeStatus.lastResult.total === 0 && !scrapeStatus?.lastError && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
+                The scrape ran fine but found 0 fixtures. If fixtures ARE showing on FA
+                Full-Time, the season has probably rolled over — FA issues new season IDs
+                each season. Update FA_BOYS_SEASON_ID / FA_GIRLS_SEASON_ID in Railway
+                (copy selectedSeason from the FullTime fixtures URL).
+              </p>
+            )}
             {scrapeStatus?.lastError && (
               <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
                 A timeout usually means FA Full-Time is blocking the cloud server's IP. Set a

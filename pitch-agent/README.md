@@ -44,11 +44,18 @@ NODE_ENV=production
 BASE_URL=https://your-project.up.railway.app
 ADMIN_PASSWORD=choose-a-password
 FA_BOYS_CLUB_ID=926960945
-FA_BOYS_SEASON_ID=353505162
+FA_BOYS_SEASON_ID=784068851
 FA_GIRLS_CLUB_ID=468454775
 FA_GIRLS_SEASON_ID=199649392
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ```
+
+**Season rollover (annual gotcha):** FA Full-Time issues a NEW season ID
+every season; club IDs stay the same. When a new season starts and the
+scrape returns 0 fixtures, open the club's FullTime fixtures page, pick the
+new season, and copy the `selectedSeason` number from the URL into
+`FA_BOYS_SEASON_ID` / `FA_GIRLS_SEASON_ID` on Railway. The downloadable
+scrape scripts pick up the same variables — re-download them after updating.
 
 `ADMIN_PASSWORD` protects the Admin tab and all admin actions (team/fixture
 edits, allocation, publish). The referee claim page, public calendar and
