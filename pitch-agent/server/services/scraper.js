@@ -473,33 +473,66 @@ async function saveFixtures(fixtures) {
   let skipped = 0;
 
   let rescheduled = 0;
+  let removedStale = 0;
   try {
+    // Group the scraped fixtures by (league_code, home, away). Reschedule
+    // detection MUST use the full pairing: this season's league_code is the
+    // DIVISION code ("16L2"), shared by every fixture in the division —
+    // matching on league_code + home_team alone made every scrape "move"
+    // arbitrary same-division fixtures onto each other's dates, scrambling
+    // the calendar on every run.
+    const byPair = new Map();
     for (const f of fixtures) {
-      // Always recompute format from gender + age_group as a safety net
+      if (!f.league_code) continue;
+      const key = `${f.league_code}||${f.home_team}||${f.away_team}`;
+      if (!byPair.has(key)) byPair.set(key, []);
+      byPair.get(key).push(f);
+    }
+
+    const handledReschedule = new Set(); // pair keys resolved via UPDATE
+
+    // Pass 1: genuine reschedules — the pair appears exactly once in the
+    // scrape AND has exactly one existing row, on a different date. Updating
+    // in place preserves any allocation/ref claim attached to the fixture.
+    for (const [key, group] of byPair) {
+      if (group.length !== 1) continue;
+      const f = group[0];
       const correctFormat = getFormat(f.age_group, f.gender);
       try {
-        // If the fixture has a league_code, check for a rescheduled match
-        // (same league_code + home_team but different date)
-        if (f.league_code) {
-          const existing = await client.query(
-            `SELECT id, match_date FROM fixtures
-             WHERE league_code = $1 AND home_team = $2 AND match_date != $3`,
-            [f.league_code, f.home_team, f.match_date]
-          );
-          if (existing.rows.length > 0) {
-            console.log(`Rescheduled: ${f.home_team} vs ${f.away_team} moved from ${existing.rows[0].match_date} to ${f.match_date}`);
-            await client.query(
-              `UPDATE fixtures SET match_date = $1, kick_off = $2, venue_name = $3,
-               gender = $4, age_group = $5,
-               format = CASE WHEN format_override = true THEN format ELSE $6 END
-               WHERE id = $7`,
-              [f.match_date, f.kick_off, f.venue_name, f.gender, f.age_group, correctFormat, existing.rows[0].id]
-            );
-            rescheduled++;
-            saved++;
-            continue;
-          }
-        }
+        const existing = await client.query(
+          `SELECT id, match_date FROM fixtures
+           WHERE league_code = $1 AND home_team = $2 AND away_team = $3`,
+          [f.league_code, f.home_team, f.away_team]
+        );
+        if (existing.rows.length !== 1) continue;
+        const row = existing.rows[0];
+        const sameDate = await client.query(
+          `SELECT 1 FROM fixtures WHERE match_date = $1 AND home_team = $2 AND away_team = $3`,
+          [f.match_date, f.home_team, f.away_team]
+        );
+        if (sameDate.rows.length > 0) continue; // already on the right date (or upsert will hit it)
+        console.log(`Rescheduled: ${f.home_team} vs ${f.away_team} moved from ${row.match_date} to ${f.match_date}`);
+        await client.query(
+          `UPDATE fixtures SET match_date = $1, kick_off = $2, venue_name = $3,
+           gender = $4, age_group = $5,
+           format = CASE WHEN format_override = true THEN format ELSE $6 END
+           WHERE id = $7`,
+          [f.match_date, f.kick_off, f.venue_name, f.gender, f.age_group, correctFormat, row.id]
+        );
+        rescheduled++;
+        saved++;
+        handledReschedule.add(key);
+      } catch (err) {
+        // fall through to the plain upsert below
+      }
+    }
+
+    // Pass 2: plain upsert by (date, home, away) for everything else
+    for (const f of fixtures) {
+      const key = `${f.league_code}||${f.home_team}||${f.away_team}`;
+      if (f.league_code && handledReschedule.has(key)) continue;
+      const correctFormat = getFormat(f.age_group, f.gender);
+      try {
         await client.query(
           `INSERT INTO fixtures (league_code, match_date, kick_off, home_team, away_team, venue_name, match_type, is_home_game, gender, age_group, format)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -517,12 +550,36 @@ async function saveFixtures(fixtures) {
         skipped++;
       }
     }
+
+    // Pass 3: heal ghosts left by the old matcher (and stale duplicates).
+    // For every pair the scrape covered, future-dated rows on dates the
+    // scrape does NOT list are stale — delete them if nothing references
+    // them (rows with allocations are left for the admin to resolve).
+    for (const [key, group] of byPair) {
+      const [lc, home, away] = key.split('||');
+      const dates = group.map(f => f.match_date);
+      try {
+        const del = await client.query(
+          `DELETE FROM fixtures
+           WHERE league_code = $1 AND home_team = $2 AND away_team = $3
+             AND match_date >= CURRENT_DATE
+             AND NOT (match_date = ANY($4::date[]))
+             AND id NOT IN (SELECT fixture_id FROM allocations WHERE fixture_id IS NOT NULL)`,
+          [lc, home, away, dates]
+        );
+        removedStale += del.rowCount;
+      } catch (err) {
+        // best-effort cleanup — never fail the save over it
+      }
+    }
+    if (removedStale > 0) console.log(`Removed ${removedStale} stale-dated duplicate fixture(s)`);
+
     console.log(`Saved ${saved} fixtures (${rescheduled} rescheduled), skipped ${skipped}`);
   } finally {
     client.release();
   }
 
-  return { saved, skipped, rescheduled };
+  return { saved, skipped, rescheduled, removedStale };
 }
 
 // Main scrape function - runs both boys and girls
