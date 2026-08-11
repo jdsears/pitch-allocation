@@ -45,11 +45,13 @@ export default function ScrapeSection({ showToast }) {
     <>
         <div className="card">
           <div className="card-header">
-            <h2>Scrape FA Full-Time</h2>
+            <h2>FA Full-Time Sync</h2>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-            FA Full-Time blocks cloud servers, so scraping runs on your computer.
-            Download the script below, double-click it, and fixtures will be imported automatically.
+            Fixtures sync automatically every morning (via a UK proxy, since FA blocks
+            cloud servers). Use <strong>Scrape now</strong> for an immediate refresh.
+            The downloadable script at the bottom is a backup if the automatic sync
+            is ever unavailable.
           </p>
 
           {/* Automatic daily scrape status */}
@@ -113,6 +115,16 @@ export default function ScrapeSection({ showToast }) {
               </p>
             ) : null}
           </div>
+
+          <details style={{ marginTop: 4 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14, padding: '8px 0', color: 'var(--text-primary)' }}>
+              🛟 Backup: run the scrape from your own computer
+            </summary>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '8px 0 16px' }}>
+              Only needed if the automatic sync keeps failing. The script scrapes FA from
+              your computer (home internet isn't blocked) and uploads the fixtures here.
+              Re-download it after any season/settings change — it bakes in the current config.
+            </p>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             <a
@@ -182,6 +194,7 @@ export default function ScrapeSection({ showToast }) {
               </p>
             </div>
           </div>
+          </details>
         </div>
     </>
   );
