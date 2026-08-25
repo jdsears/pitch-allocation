@@ -56,7 +56,8 @@ async function ensureSchema(q) {
   await q.query(`CREATE INDEX IF NOT EXISTS idx_allocations_fixture ON allocations (fixture_id)`);
 
   // --- Data rules that must hold even on old rows ---
-  // Shropham 11v11 is undersized (U14 max); Morley 11v11 is full size (U15 min)
+  // 11v11 splits by pitch size: U14 play JUNIOR 11v11 at Shropham
+  // (undersized, U14 max); full-size 11v11 from U15 at Morley (U15 min)
   await q.query(
     `UPDATE pitches SET max_age_group = 'U14'
      WHERE venue_id = (SELECT id FROM venues WHERE name = 'Shropham' LIMIT 1)

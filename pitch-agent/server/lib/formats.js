@@ -5,7 +5,12 @@
  *
  * League rules (2026/27 — formats moved up a year over the summer):
  * U5–U7 play 3v3 mini-soccer at Morley, U8–U9 5v5, U10–U11 7v7,
- * U12–U13 9v9, full 11v11 from U14. Girls U14 stays 9v9 (one year later).
+ * U12–U13 9v9, 11v11 from U14. Girls U14 stays 9v9 (one year later).
+ *
+ * Note: 11v11 splits by pitch SIZE, handled by pitch age restrictions
+ * (not formats): U14 play JUNIOR 11v11 on Shropham's undersized pitch
+ * (max_age_group=U14); full-size 11v11 from U15 on Morley's pitch
+ * (min_age_group=U15). See db/schema.js data rules.
  */
 
 const AGE_TO_FORMAT = {
