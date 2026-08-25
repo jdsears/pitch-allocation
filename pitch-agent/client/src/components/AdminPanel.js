@@ -182,8 +182,8 @@ export default function AdminPanel() {
 
   const handleImport = async () => {
     try {
-      const boysFormatMap = { U5: '3v3', U6: '3v3', U7: '3v3', U8: '5v5', U9: '7v7', U10: '7v7', U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
-      const girlsFormatMap = { ...boysFormatMap, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
+      const boysFormatMap = { U5: '3v3', U6: '3v3', U7: '3v3', U8: '5v5', U9: '5v5', U10: '7v7', U11: '7v7', U12: '9v9', U13: '9v9', U14: '11v11', U15: '11v11', U16: '11v11', U17: '11v11', U18: '11v11' };
+      const girlsFormatMap = { ...boysFormatMap, U14: '9v9' };
 
       const valid = manualRows.filter(r => r.match_date && r.home_team && r.away_team);
       if (valid.length === 0) {

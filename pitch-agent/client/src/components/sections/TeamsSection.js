@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   listTeams,
   addTeam,
@@ -60,8 +60,13 @@ export default function TeamsSection({ venues, showToast }) {
     }
   };
 
+  const formRef = useRef(null);
+
   const editTeam = (t) => {
     setEditingTeamId(t.id);
+    // The edit form lives at the top of the card — on a phone scrolled down
+    // to the table, clicking Edit looked like it did nothing. Scroll to it.
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
     setTeamForm({
       name: t.name,
       age_group: t.age_group || '',
@@ -155,7 +160,12 @@ export default function TeamsSection({ venues, showToast }) {
             override to steer allocation; a default camera pre-fills new allocations.
           </p>
 
-          <form onSubmit={submitTeam} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <form ref={formRef} onSubmit={submitTeam} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {editingTeamId && (
+              <div style={{ flex: '1 1 100%', background: 'var(--bg-input)', border: '1px solid var(--accent)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+                ✏️ Editing <strong>{teamForm.name}</strong> — change the fields below and press Save
+              </div>
+            )}
             <input
               placeholder="Team name (must match FA name)"
               value={teamForm.name}

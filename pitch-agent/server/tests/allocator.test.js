@@ -140,22 +140,28 @@ test('U5/U6/U7 mini-soccer goes to the 3v3 pitch', async () => {
   assert.ok(state.inserted.every(i => i.pitch_id === 40), 'all land on the Morley 3v3 pitch');
 });
 
-test('shared format map is the single source (spot checks)', () => {
+test('shared format map matches the 2026/27 league rules', () => {
   const { computeFormat } = require('../lib/formats');
   assert.equal(computeFormat('U5', 'boys'), '3v3');
   assert.equal(computeFormat('U5', 'girls'), '3v3');
   assert.equal(computeFormat('U8', 'boys'), '5v5');
+  assert.equal(computeFormat('U9', 'boys'), '5v5', 'U9 stays 5v5 this season');
   assert.equal(computeFormat('U9', 'girls'), '5v5');
-  assert.equal(computeFormat('U14', 'girls'), '9v9');
+  assert.equal(computeFormat('U10', 'boys'), '7v7');
+  assert.equal(computeFormat('U11', 'boys'), '7v7', 'U11 is 7v7 this season');
+  assert.equal(computeFormat('U12', 'boys'), '9v9');
+  assert.equal(computeFormat('U13', 'boys'), '9v9', 'U13 stays 9v9 this season');
+  assert.equal(computeFormat('U14', 'boys'), '11v11');
+  assert.equal(computeFormat('U14', 'girls'), '9v9', 'girls U14 stays 9v9');
   assert.equal(computeFormat('unknown', 'boys'), '11v11');
 });
 
 test('kick-off rotation: last week\'s early team goes later', async () => {
   reset({
-    fixtures: [fix(1, 'Morley YFC U9 Reds', 'U9', '7v7'), fix(2, 'Morley YFC U9 Blues', 'U9', '7v7')],
+    fixtures: [fix(1, 'Morley YFC U10 Reds', 'U10', '7v7'), fix(2, 'Morley YFC U10 Blues', 'U10', '7v7')],
     history: [
-      { team: 'Morley YFC U9 Reds', pitch_id: 30, kick_off: '10:00:00' },  // had early last time
-      { team: 'Morley YFC U9 Blues', pitch_id: 30, kick_off: '11:15:00' }, // had late last time
+      { team: 'Morley YFC U10 Reds', pitch_id: 30, kick_off: '10:00:00' },  // had early last time
+      { team: 'Morley YFC U10 Blues', pitch_id: 30, kick_off: '11:15:00' }, // had late last time
     ],
   });
   const res = await allocateFixtures(WEEK);
@@ -165,7 +171,7 @@ test('kick-off rotation: last week\'s early team goes later', async () => {
 });
 
 test('no matching pitch reports a conflict, not a crash', async () => {
-  reset({ fixtures: [fix(1, 'Morley YFC U11 Owls', 'U11', '9v9')] }); // no 9v9 pitch in this fixture set
+  reset({ fixtures: [fix(1, 'Morley YFC U12 Owls', 'U12', '9v9')] }); // no 9v9 pitch in this fixture set
   const res = await allocateFixtures(WEEK);
   assert.equal(res.allocated, 0);
   assert.equal(res.conflicts.length, 1);

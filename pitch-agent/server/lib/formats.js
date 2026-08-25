@@ -3,22 +3,28 @@
  * require this instead of copying the map (8 drifting copies caused U6/U7
  * to import as 5v5 after the 3v3 change; consolidating prevents a repeat).
  *
- * Club rules: U5–U7 play 3v3 mini-soccer at Morley, U8 5v5, U9–U10 7v7,
- * U11–U12 9v9, U13+ 11v11. Girls play formats one year later (NWGFL):
- * U9 stays 5v5, U11 7v7, U13/U14 9v9, 11v11 from U15.
+ * League rules (2026/27 — formats moved up a year over the summer):
+ * U5–U7 play 3v3 mini-soccer at Morley, U8–U9 5v5, U10–U11 7v7,
+ * U12–U13 9v9, 11v11 from U14. Girls U14 stays 9v9 (one year later).
+ *
+ * Note: 11v11 splits by pitch SIZE, handled by pitch age restrictions
+ * (not formats): U14 play JUNIOR 11v11 on Shropham's undersized pitch
+ * (max_age_group=U14); full-size 11v11 from U15 on Morley's pitch
+ * (min_age_group=U15). See db/schema.js data rules.
  */
 
 const AGE_TO_FORMAT = {
-  U5: '3v3', U6: '3v3', U7: '3v3', U8: '5v5',
-  U9: '7v7', U10: '7v7',
-  U11: '9v9', U12: '9v9',
-  U13: '11v11', U14: '11v11', U15: '11v11',
+  U5: '3v3', U6: '3v3', U7: '3v3',
+  U8: '5v5', U9: '5v5',
+  U10: '7v7', U11: '7v7',
+  U12: '9v9', U13: '9v9',
+  U14: '11v11', U15: '11v11',
   U16: '11v11', U17: '11v11', U18: '11v11',
 };
 
 const GIRLS_AGE_TO_FORMAT = {
   ...AGE_TO_FORMAT,
-  U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9',
+  U14: '9v9',
 };
 
 function computeFormat(ageGroup, gender) {
