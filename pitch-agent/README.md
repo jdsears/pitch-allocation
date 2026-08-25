@@ -174,7 +174,7 @@ morley-pitch-agent/
 - **Shropham Saturday** (U12B): KO slots at 10:00, 12:00, 14:00
 - **Shropham Sunday** (boys): KO slots at 10:00, 12:00, 14:00
 - **Rotation:** Each team takes turns getting the 10am slot. If Team A had 10:00 last week and Team B had 11:15, this week Team B gets 10:00 and Team A gets 11:15
-- **Format mapping:** U5-U7 → 3v3, U8 → 5v5, U9-U10 → 7v7, U11-U12 → 9v9, U13+ → 11v11 (single source: server/lib/formats.js)
+- **Format mapping (2026/27):** U5-U7 → 3v3, U8-U9 → 5v5, U10-U11 → 7v7, U12-U13 → 9v9, U14+ → 11v11; girls U14 stays 9v9 (single source: server/lib/formats.js)
 - **Single ref pool** covering all matches across both days
 
 ## Manual Fixture Import
