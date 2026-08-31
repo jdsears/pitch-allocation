@@ -529,6 +529,7 @@ async function getAllocationGrid(weekStartDate) {
     grid[venue][pitch][date].push({
       allocation_id: row.allocation_id,
       pitch_id: row.pitch_id,
+      pitch_format: row.pitch_format,
       kick_off: row.allocated_kick_off,
       home_team: row.home_team,
       away_team: row.away_team,

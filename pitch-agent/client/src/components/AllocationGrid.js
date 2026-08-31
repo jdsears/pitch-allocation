@@ -233,6 +233,21 @@ export default function AllocationGrid({ isAdmin = false }) {
 
   const totalGames = summary?.venues?.reduce((s, v) => s + parseInt(v.total_games), 0) || 0;
   const refsNeeded = summary?.unrefereed?.length || 0;
+  // Allocations whose pitch no longer matches the game's format (format
+  // rules changed after the week was confirmed) — confirmed rows are never
+  // auto-moved, so surface them for a manual pitch change + re-publish
+  let formatMismatches = 0;
+  if (grid?.grid) {
+    Object.values(grid.grid).forEach(pitches =>
+      Object.values(pitches).forEach(dates =>
+        Object.values(dates).forEach(allocs =>
+          allocs.forEach(a => {
+            if (a.format && a.pitch_format && a.format !== a.pitch_format) formatMismatches++;
+          })
+        )
+      )
+    );
+  }
   const refsClaimed = totalGames - refsNeeded;
   const fixtureCount = fixtures?.length || 0;
   const unallocatedCount = fixtureCount - totalGames;
@@ -537,6 +552,15 @@ export default function AllocationGrid({ isAdmin = false }) {
                                     {a.gender === 'girls' && (
                                       <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
                                     )}
+                                    {a.format && a.pitch_format && a.format !== a.pitch_format && (
+                                      <span
+                                        className="badge badge-red"
+                                        style={{ marginLeft: 4 }}
+                                        title={`This game is ${a.format} but it's allocated to a ${a.pitch_format} pitch — its format changed after allocation. Edit the row and pick the right pitch, then re-publish.`}
+                                      >
+                                        ⚠️ {a.format} game on {a.pitch_format} pitch
+                                      </span>
+                                    )}
                                   </td>
                                   <td>
                                     {a.referee ? (
@@ -643,6 +667,14 @@ export default function AllocationGrid({ isAdmin = false }) {
               <div style={{ marginBottom: 16, padding: 12, background: 'rgba(220, 60, 60, 0.12)', border: '1px solid var(--red)', borderRadius: 8, fontSize: 13, color: 'var(--red)' }}>
                 ⚠️ {refsNeeded} match{refsNeeded > 1 ? 'es' : ''} still {refsNeeded > 1 ? 'need' : 'needs'} a referee.
                 The WhatsApp message includes the claim link, so refs can pick these up after publishing.
+              </div>
+            )}
+            {formatMismatches > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, background: 'rgba(220, 60, 60, 0.12)', border: '1px solid var(--red)', borderRadius: 8, fontSize: 13, color: 'var(--red)' }}>
+                🛑 {formatMismatches} game{formatMismatches > 1 ? 's are' : ' is'} on a pitch that doesn't match
+                {formatMismatches > 1 ? ' their' : ' its'} format (marked ⚠️ in the grid — usually because format
+                rules changed after the week was confirmed). Fix the pitch via the row's edit dropdown before
+                publishing, or the WhatsApp message will list {formatMismatches > 1 ? 'them' : 'it'} under the wrong pitch.
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
