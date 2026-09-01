@@ -12,7 +12,7 @@ const { AGE_TO_FORMAT, GIRLS_AGE_TO_FORMAT } = require('../lib/formats');
 // update at season rollover fixes both paths; defaults are 2026/27.
 const BOYS_SEASON_ID = process.env.FA_BOYS_SEASON_ID || '784068851';
 const BOYS_CLUB_ID = process.env.FA_BOYS_CLUB_ID || '926960945';
-const GIRLS_SEASON_ID = process.env.FA_GIRLS_SEASON_ID || '199649392';
+const GIRLS_SEASON_ID = process.env.FA_GIRLS_SEASON_ID || '362492254';
 const GIRLS_CLUB_ID = process.env.FA_GIRLS_CLUB_ID || '468454775';
 
 function buildFixtureUrl(seasonId, clubId) {
