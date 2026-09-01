@@ -648,10 +648,24 @@ const scrapeState = {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// If a run has held the lock longer than this, assume it hung (puppeteer can
-// stall indefinitely when FA blocks the host) and let a new run take over.
-// Without this, one stuck scrape blocks every future run until a redeploy.
-const STALE_RUN_MS = (parseInt(process.env.SCRAPE_STALE_MINUTES, 10) || 10) * 60 * 1000;
+// A full run now covers three leagues through the proxy and can
+// legitimately take ~10 minutes, so: hard-timeout a run at 15 minutes
+// (clears the lock properly and records the failure), and only allow a
+// stale-lock takeover after 20 — the timeout should always fire first.
+const RUN_TIMEOUT_MS = (parseInt(process.env.SCRAPE_RUN_TIMEOUT_MINUTES, 10) || 15) * 60 * 1000;
+const STALE_RUN_MS = (parseInt(process.env.SCRAPE_STALE_MINUTES, 10) || 20) * 60 * 1000;
+
+async function withTimeout(promise, ms, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label)), ms); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Run a scrape, recording status and preventing overlapping runs.
@@ -687,7 +701,12 @@ async function runScrape(source = 'manual', { attempts = 1, retryDelayMs = 60000
     let lastErr = null;
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        const result = await scrapeAll();
+        // Hard cap: a hung page load can otherwise hold the running flag
+        // forever ('stuck on Scraping…' until redeploy)
+        const result = await withTimeout(
+          scrapeAll(), RUN_TIMEOUT_MS,
+          `Scrape run timed out after ${Math.round(RUN_TIMEOUT_MS / 60000)} minutes`
+        );
         scrapeState.lastResult = result;
         scrapeState.lastError = null;
         scrapeState.lastRunAt = new Date().toISOString();

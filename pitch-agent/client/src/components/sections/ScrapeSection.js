@@ -63,12 +63,15 @@ export default function ScrapeSection({ showToast }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-sm btn-outline" onClick={loadScrapeStatus}>Refresh</button>
                 <button className="btn btn-sm btn-primary" onClick={handleScrapeNow} disabled={scraping || scrapeStatus?.running}>
-                  {scraping || scrapeStatus?.running ? '⏳ Scraping…' : 'Scrape now'}
+                  {scraping || scrapeStatus?.running
+                    ? `⏳ Scraping…${scrapeStatus?.runningSince ? ` (${Math.max(1, Math.round((Date.now() - new Date(scrapeStatus.runningSince).getTime()) / 60000))}m)` : ''}`
+                    : 'Scrape now'}
                 </button>
               </div>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 10 }}>
               Fixtures are scraped automatically every morning at 06:00 (UK). You can also run it now.
+              {scrapeStatus?.running && ' A full sync covers three leagues through the proxy and can take 5\u201310 minutes.'}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 13 }}>
               <span className="badge badge-blue">
