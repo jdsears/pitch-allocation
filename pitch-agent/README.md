@@ -65,6 +65,15 @@ is disabled entirely (useful for first deploy, but set it!).
 Optional scrape schedule overrides: `SCRAPE_CRON` (default `0 6 * * *`)
 and `SCRAPE_TZ` (default `Europe/London`).
 
+Vets fixtures (optional third scrape source — the vets league is filtered
+by team, not club, on FullTime; fixtures tag as VETS/11v11 and allocate to
+Morley's full-size pitch):
+```
+FA_VETS_SEASON_ID=593642637
+FA_VETS_TEAM_ID=219204264
+```
+Note: the downloadable backup scrape script covers boys+girls only.
+
 #### Making the automatic scrape work from the cloud (`SCRAPE_PROXY`)
 
 FA Full-Time blocks cloud/data-centre IPs, so a scrape run from Railway

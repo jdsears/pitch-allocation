@@ -69,6 +69,16 @@ async function ensureSchema(q) {
      AND format = '11v11' AND min_age_group IS NULL`
   );
 
+  // Vets play Sunday 14:30 on Morley's full-size 11v11 — add that slot
+  // (idempotent; no-ops until the pitch exists)
+  await q.query(
+    `INSERT INTO time_slots (pitch_id, kick_off, day_of_week)
+     SELECT p.id, '14:30', 'Sunday' FROM pitches p
+     JOIN venues v ON v.id = p.venue_id
+     WHERE v.name = 'Morley' AND p.format = '11v11'
+     ON CONFLICT (pitch_id, kick_off, day_of_week) DO NOTHING`
+  );
+
   // 3v3 pitch at Morley for U6/U7 mini-soccer (added mid-season, so existing
   // deployments pick it up here — the /api/setup seed only runs once).
   // No-ops until the Morley venue exists; safe to re-run.
