@@ -712,12 +712,25 @@ async function runScrape(source = 'manual', { attempts = 1, retryDelayMs = 60000
   }
 }
 
-/** Latest run from the DB (survives restarts), falling back to memory. */
+/** Latest run from the DB (survives restarts), falling back to memory.
+ *  Also reports the latest SUCCESSFUL run — a failed manual click should
+ *  not visually erase a healthy 06:00 sync. */
 async function getScrapeStatus() {
   try {
     const r = await pool.query(`SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1`);
     if (r.rows.length > 0) {
       const row = r.rows[0];
+      let lastSuccess = null;
+      try {
+        const ok = await pool.query(
+          `SELECT finished_at, total, saved FROM scrape_runs
+           WHERE error IS NULL AND finished_at IS NOT NULL
+           ORDER BY id DESC LIMIT 1`
+        );
+        if (ok.rows.length > 0) {
+          lastSuccess = { at: ok.rows[0].finished_at, total: ok.rows[0].total, saved: ok.rows[0].saved };
+        }
+      } catch (e) { /* best effort */ }
       return {
         running: scrapeState.running,
         runningSince: scrapeState.runningSince,
@@ -727,6 +740,7 @@ async function getScrapeStatus() {
           : { total: row.total, saved: row.saved, rescheduled: row.rescheduled },
         lastError: row.error,
         lastSource: row.source,
+        lastSuccess,
       };
     }
   } catch (e) {

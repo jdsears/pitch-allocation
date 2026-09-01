@@ -87,6 +87,11 @@ export default function ScrapeSection({ showToast }) {
                   Last error: {String(scrapeStatus.lastError).slice(0, 60)}
                 </span>
               )}
+              {scrapeStatus?.lastError && scrapeStatus?.lastSuccess && (
+                <span className="badge badge-green" title="The most recent scrape that completed successfully — fixtures are current as of this time.">
+                  Last successful sync: {new Date(scrapeStatus.lastSuccess.at).toLocaleString()} ({scrapeStatus.lastSuccess.saved} saved)
+                </span>
+              )}
             </div>
             {scrapeStatus?.lastResult && scrapeStatus.lastResult.total === 0 && !scrapeStatus?.lastError && (
               <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
