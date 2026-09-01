@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const cron = require('node-cron');
-const { runScrape } = require('./services/scraper');
+const { runScrape, getScrapeStatus } = require('./services/scraper');
 const { requireAdmin, requireAdminForMutations, login, verifyToken, authEnabled } = require('./middleware/auth');
 const { ensureSchema } = require('./db/schema');
 
@@ -155,6 +155,24 @@ if (cron.validate(SCRAPE_CRON)) {
 } else {
   console.warn(`Invalid SCRAPE_CRON "${SCRAPE_CRON}" — daily scrape not scheduled`);
 }
+
+// Catch up a missed daily scrape: the 06:00 cron only fires if the process
+// is alive at that instant — a deploy or crash spanning it silently skips
+// the day. A couple of minutes after boot, if no scrape has succeeded in
+// >25h, run one. The overlap lock makes this safe across restart storms.
+setTimeout(async () => {
+  try {
+    const status = await getScrapeStatus();
+    const lastOk = status.lastSuccess?.at ? new Date(status.lastSuccess.at).getTime() : 0;
+    if (Date.now() - lastOk > 25 * 60 * 60 * 1000) {
+      console.log('[catch-up] No successful scrape in >25h — running one now');
+      const result = await runScrape('catch-up');
+      console.log('[catch-up] Scrape result:', JSON.stringify(result));
+    }
+  } catch (err) {
+    console.warn('[catch-up] Scrape failed:', err.message);
+  }
+}, 2 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Morley Pitch Agent running on port ${PORT}`);
