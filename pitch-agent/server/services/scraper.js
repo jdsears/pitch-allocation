@@ -343,6 +343,31 @@ async function scrapeGirlsFixtures() {
   return fixtures;
 }
 
+// The vets league is filtered by TEAM (not club) on FullTime, and vets
+// team names carry no U-number — so tag them VETS/11v11 explicitly.
+// Feature is off until FA_VETS_SEASON_ID + FA_VETS_TEAM_ID are set.
+function buildTeamFixtureUrl(seasonId, teamId) {
+  return `https://fulltime.thefa.com/fixtures.html?selectedSeason=${seasonId}&selectedFixtureGroupKey=&selectedDateCode=all&selectedClub=&selectedTeam=${teamId}&selectedRelatedFixtureOption=3&selectedFixtureDateStatus=&selectedFixtureStatus=&previousSelectedFixtureGroupAgeGroup=&previousSelectedFixtureGroupKey=&previousSelectedClub=&itemsPerPage=100`;
+}
+
+async function scrapeVetsFixtures() {
+  const seasonId = process.env.FA_VETS_SEASON_ID;
+  const teamId = process.env.FA_VETS_TEAM_ID;
+  if (!seasonId || !teamId) return [];
+  const url = buildTeamFixtureUrl(seasonId, teamId);
+  console.log('Scraping vets fixtures...');
+  const html = await fetchRenderedHTML(url);
+  const fixtures = parseFixtures(html, 'boys').map(f => ({
+    ...f,
+    age_group: 'VETS',
+    format: '11v11',
+    gender: 'vets',
+    match_type: 'Vets',
+  }));
+  console.log(`Vets: found ${fixtures.length} fixtures`);
+  return fixtures;
+}
+
 // Debug function: returns raw HTML and parsing diagnostics
 // Captures as much info as possible even if the page partially loads
 async function debugScrape(gender) {
@@ -586,9 +611,16 @@ async function saveFixtures(fixtures) {
 async function scrapeAll() {
   const boys = await scrapeBoysFixtures();
   const girls = await scrapeGirlsFixtures();
-  const all = [...boys, ...girls];
+  // Vets are optional and secondary — a failure there shouldn't sink the run
+  let vets = [];
+  try {
+    vets = await scrapeVetsFixtures();
+  } catch (err) {
+    console.warn(`Vets scrape failed (continuing without): ${err.message}`);
+  }
+  const all = [...boys, ...girls, ...vets];
 
-  console.log(`Total fixtures found: ${all.length} (${boys.length} boys, ${girls.length} girls)`);
+  console.log(`Total fixtures found: ${all.length} (${boys.length} boys, ${girls.length} girls, ${vets.length} vets)`);
 
   const result = await saveFixtures(all);
   return { total: all.length, ...result };
@@ -703,4 +735,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError };
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, scrapeVetsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError };

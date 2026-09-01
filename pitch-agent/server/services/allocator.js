@@ -274,8 +274,10 @@ async function allocateFixtures(weekStartDate) {
           // pitch rather than being forced to Shropham)
           const team = teamFor(fixture.home_team);
           if (team && team.home_venue_id && team.home_venue_id === pitch.venue_id) return true;
-          const fixtureAge = ageGroupNumber(fixture.age_group);
-          if (!fixtureAge) return true; // can't determine age, allow
+          // Unknown age (e.g. VETS — adult teams carry no U-number) means
+          // ADULT: too old for max-age junior pitches (Shropham 11v11),
+          // fine for min-age full-size pitches (Morley 11v11).
+          const fixtureAge = ageGroupNumber(fixture.age_group) ?? 99;
           if (pitch.max_age_group) {
             const maxAge = ageGroupNumber(pitch.max_age_group);
             if (maxAge && fixtureAge > maxAge) return false;

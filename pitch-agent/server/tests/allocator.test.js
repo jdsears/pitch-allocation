@@ -140,6 +140,19 @@ test('U5/U6/U7 mini-soccer goes to the 3v3 pitch', async () => {
   assert.ok(state.inserted.every(i => i.pitch_id === 40), 'all land on the Morley 3v3 pitch');
 });
 
+test('vets (no U-number = adult) go to the full-size Morley 11v11, never Shropham', async () => {
+  reset({
+    fixtures: [
+      fix(1, 'Morley Youth F.C. Vets', 'VETS', '11v11'),
+      // null age group must also route as adult, not 'fits anywhere'
+      fix(2, 'Morley Youth F.C. Veterans', null, '11v11', { format_override: true }),
+    ],
+  });
+  const res = await allocateFixtures(WEEK);
+  assert.equal(res.allocated, 2);
+  assert.ok(state.inserted.every(i => i.pitch_id === 10), 'adults on Morley full-size, not the U14-max junior pitch');
+});
+
 test('shared format map matches the 2026/27 league rules', () => {
   const { computeFormat } = require('../lib/formats');
   assert.equal(computeFormat('U5', 'boys'), '3v3');
@@ -154,6 +167,7 @@ test('shared format map matches the 2026/27 league rules', () => {
   assert.equal(computeFormat('U14', 'boys'), '11v11');
   assert.equal(computeFormat('U14', 'girls'), '9v9', 'girls U14 stays 9v9');
   assert.equal(computeFormat('unknown', 'boys'), '11v11');
+  assert.equal(computeFormat('VETS', 'vets'), '11v11', 'vets are full 11v11');
 });
 
 test('kick-off rotation: last week\'s early team goes later', async () => {
