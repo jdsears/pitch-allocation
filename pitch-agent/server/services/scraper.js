@@ -104,6 +104,15 @@ async function launchBrowser() {
   return puppeteer.launch(launchOptions);
 }
 
+// Third-party analytics/ads on FA pages burn paid proxy bandwidth without
+// affecting the fixture table. Block them (block-list, not allow-list, so
+// FA's own JS that renders the table always gets through).
+const BLOCKED_THIRD_PARTIES = /googletagmanager\.com|google-analytics\.com|doubleclick\.net|googlesyndication\.com|facebook\.(com|net)|hotjar\.com|clarity\.ms|adservice\.google/;
+
+function isBlockedThirdParty(url) {
+  return BLOCKED_THIRD_PARTIES.test(String(url || ''));
+}
+
 // Connection-class failures that a rotating proxy throws intermittently —
 // they fail within seconds, so a quick retry usually succeeds. Slow
 // navigation timeouts (FA blocking) are NOT retried here; each attempt
@@ -127,7 +136,7 @@ async function fetchRenderedHTML(url) {
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const type = req.resourceType();
-      if (['image', 'font', 'media'].includes(type)) {
+      if (['image', 'font', 'media'].includes(type) || isBlockedThirdParty(req.url())) {
         req.abort();
       } else {
         req.continue();
