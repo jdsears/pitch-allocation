@@ -137,6 +137,20 @@ router.post('/scrape', async (req, res) => {
   }
 });
 
+// GET /api/fixtures/proxy-test - raw network diagnostic for the proxy path.
+// Use when scrapes fail with tunnel errors but the provider's own tester
+// passes: paste the JSON to their support (it names this server's source
+// IP and the exact CONNECT failure).
+router.get('/proxy-test', async (req, res) => {
+  try {
+    const { proxySelfTest } = require('../lib/proxySelfTest');
+    const { parseProxy } = require('../services/scraper');
+    res.json(await proxySelfTest(parseProxy));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/fixtures/scrape-status - last scrape result + schedule info
 router.get('/scrape-status', async (req, res) => {
   res.json(await getScrapeStatus());
