@@ -115,3 +115,30 @@ test('transient proxy errors are recognised for retry; slow timeouts are not', (
   assert.ok(!isTransientNavError('Navigation timeout of 90000 ms exceeded'));
   assert.ok(!isTransientNavError(''));
 });
+
+test('navigation retry backs off exponentially and caps at a minute', () => {
+  const { navRetryDelayMs } = require('../services/scraper');
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(navRetryDelayMs), [5000, 10000, 20000, 40000, 60000, 60000]);
+});
+
+test('proxy self-test reads the gateway status code correctly', () => {
+  const { interpret, describeConnect } = require('../lib/proxySelfTest');
+  const ok = { ok: true };
+  const gw504 = { ok: false, stage: 'CONNECT', statusCode: 504, error: 'HTTP 504' };
+  const gw403 = { ok: false, stage: 'CONNECT', statusCode: 403, error: 'HTTP 403' };
+  const gw407 = { ok: false, stage: 'CONNECT', statusCode: 407, error: 'HTTP 407' };
+  const refused = { ok: false, stage: 'CONNECT', error: 'ECONNREFUSED' };
+  const run = (results) => ({ ok: results.some((r) => r.ok), successes: results.filter((r) => r.ok).length, attempts: results.length, results });
+
+  // A 504 is the provider's pool failing, not a block on our IP
+  assert.match(describeConnect([gw504]), /could not reach a working exit/);
+  assert.match(describeConnect([gw403]), /by policy/);
+  assert.match(describeConnect([gw407]), /credentials/);
+  assert.match(describeConnect([refused]), /network-path/);
+  assert.equal(describeConnect([ok, ok]), null);
+
+  assert.match(interpret(run([ok, ok]), run([ok, ok])), /Every attempt succeeded/);
+  assert.match(interpret(run([ok, gw504]), run([gw504, ok])), /intermittent.*1\/2.*1\/2/);
+  assert.match(interpret(run([ok, ok]), run([gw403, gw403])), /never to fulltime\.thefa\.com.*by policy/);
+  assert.match(interpret(run([gw504, gw504]), run([gw504, gw504])), /cannot tunnel.*at all \(0\/4\)/);
+});

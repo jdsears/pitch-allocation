@@ -6,16 +6,19 @@
  * exactly happens when you connect?". Uses raw Node HTTP (no puppeteer), so
  * the result is the unvarnished network truth.
  *
- * Two tunnels are tried: one to a neutral IP-echo service (proves the
- * gateway accepts this server at all) and one to FA Full-Time itself (the
- * only destination the scraper needs — a provider can accept the tunnel in
- * general yet refuse a specific destination host).
+ * Two destinations are tried, several times each: a neutral IP-echo service
+ * (proves the gateway accepts this server at all) and FA Full-Time itself
+ * (the only destination the scraper needs — a provider can accept the tunnel
+ * in general yet refuse a specific host). Repeating the attempts matters
+ * because a rotating residential proxy lands each CONNECT on a different
+ * exit: a pool having a bad hour shows as a low success rate, not a hard no.
  */
 const https = require('https');
 const http = require('http');
 const tls = require('tls');
 
 const FA_HOST = 'fulltime.thefa.com';
+const ATTEMPTS = 4;
 
 function directEgressIp(timeoutMs = 8000) {
   return new Promise((resolve) => {
@@ -91,33 +94,58 @@ const FA_TARGET = {
   },
 };
 
+async function repeated(proxy, target) {
+  const attempts = await Promise.all(Array.from({ length: ATTEMPTS }, () => throughProxy(proxy, target)));
+  const successes = attempts.filter((a) => a.ok).length;
+  return { ok: successes > 0, successes, attempts: attempts.length, results: attempts };
+}
+
+// Explain a CONNECT outcome in provider-support terms. The status code the
+// gateway answers with is the whole story: 407 is our credentials, 403 is a
+// policy block, 5xx is the gateway failing to reach an exit (their side,
+// usually intermittent), and no status at all means we never reached the
+// gateway.
+function describeConnect(results) {
+  const failures = results.filter((r) => !r.ok);
+  if (!failures.length) return null;
+  const codes = [...new Set(failures.map((r) => r.statusCode).filter(Boolean))];
+  if (codes.includes(407)) return 'the proxy rejected our credentials (HTTP 407) — check SCRAPE_PROXY matches the provider dashboard';
+  if (codes.includes(403)) return 'the proxy refused the tunnel by policy (HTTP 403) — ask the provider whether this server IP or the destination host is blocked';
+  if (codes.some((c) => c >= 500)) return `the proxy gateway accepted us but could not reach a working exit (HTTP ${codes.filter((c) => c >= 500).join('/')}) — a provider-side pool problem, usually intermittent; retries and time are the fix, and the provider can confirm a pool incident`;
+  return `the tunnel failed before the gateway answered (${failures[0].error}) — a network-path problem between this server and the proxy`;
+}
+
 function interpret(tunnel, fa) {
-  if (tunnel.ok && fa.ok) {
-    return 'Tunnel works and FA Full-Time answers through it. A failed scrape was a transient outage — try Scrape now again; if it keeps failing, FA may be blocking the proxy exit IP.';
+  const rate = (r) => `${r.successes}/${r.attempts}`;
+  if (tunnel.successes === tunnel.attempts && fa.successes === fa.attempts) {
+    return 'Every attempt succeeded, to both the neutral host and FA Full-Time. A failed scrape was a passing outage — try Scrape now again.';
   }
   if (tunnel.ok && !fa.ok) {
-    return `Tunnel works in general but NOT to ${FA_HOST}. Give the provider this exact error — their gateway is refusing that destination host.`;
+    return `Tunnel works to the neutral host (${rate(tunnel)}) but never to ${FA_HOST} (${rate(fa)}): ${describeConnect(fa.results)}.`;
   }
-  return 'This server cannot tunnel through the proxy at all. Give the provider serverEgressIp and this exact error — likely their gateway is filtering this source IP.';
+  if (tunnel.ok || fa.ok) {
+    return `Tunnel is intermittent right now — neutral host ${rate(tunnel)}, FA ${rate(fa)}: ${describeConnect([...tunnel.results, ...fa.results])}. The scraper retries with backoff, so the next run may well succeed.`;
+  }
+  return `This server cannot tunnel through the proxy at all (0/${tunnel.attempts + fa.attempts}): ${describeConnect([...tunnel.results, ...fa.results])}.`;
 }
 
 async function proxySelfTest(parseProxy) {
   const proxy = parseProxy();
-  const notConfigured = { ok: false, error: 'SCRAPE_PROXY not configured' };
+  const notConfigured = { ok: false, successes: 0, attempts: 0, results: [{ ok: false, error: 'SCRAPE_PROXY not configured' }] };
   const [direct, tunneled, fa] = await Promise.all([
     directEgressIp(),
-    proxy ? throughProxy(proxy, IPIFY_TARGET) : Promise.resolve(notConfigured),
-    proxy ? throughProxy(proxy, FA_TARGET) : Promise.resolve(notConfigured),
+    proxy ? repeated(proxy, IPIFY_TARGET) : Promise.resolve(notConfigured),
+    proxy ? repeated(proxy, FA_TARGET) : Promise.resolve(notConfigured),
   ]);
   return {
     ranAt: new Date().toISOString(),
     serverEgressIp: direct,           // give this IP to the proxy provider
     proxyConfigured: !!proxy,
     proxyServer: proxy ? proxy.server : null,
-    connectionThroughProxy: tunneled, // ok:true + exitIp = gateway accepts this server
-    faThroughProxy: fa,               // ok:true + statusCode = FA reachable via the proxy
-    interpretation: interpret(tunneled, fa),
+    connectionThroughProxy: tunneled, // successes/attempts to a neutral host
+    faThroughProxy: fa,               // successes/attempts to FA Full-Time
+    interpretation: proxy ? interpret(tunneled, fa) : 'SCRAPE_PROXY is not configured — the scraper will hit FA directly and be blocked.',
   };
 }
 
-module.exports = { proxySelfTest };
+module.exports = { proxySelfTest, interpret, describeConnect };
