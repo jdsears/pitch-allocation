@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const pool = require('../db/pool');
+const { startProxyForwarder } = require('../lib/proxyForwarder');
 
 // Find the system-installed Chromium binary
 function findChromiumPath() {
@@ -44,8 +45,10 @@ function isMorleyHome(homeTeam) {
  *   host:port
  *   http://host:port
  *   http://user:pass@host:port   (socks5://… also works)
- * Chromium's --proxy-server can't carry credentials, so we strip them here
- * and apply them per-page via page.authenticate().
+ * Chromium's --proxy-server can't carry credentials, so we strip them here.
+ * They are injected by a local forwarder (lib/proxyForwarder) that Chromium
+ * is pointed at, so the gateway sees credentials on every CONNECT up front;
+ * page.authenticate() stays as a fallback for the challenge flow.
  */
 function parseProxy() {
   const raw = (process.env.SCRAPE_PROXY || '').trim();
@@ -81,14 +84,35 @@ async function launchBrowser() {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--single-process',
+      // Chromium phones home (safe-browsing, component updates, account
+      // checks) on launch — through the paid proxy. Switch that off.
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-sync',
+      '--disable-default-apps',
+      '--no-first-run',
     ]
   };
 
   const proxy = parseProxy();
+  let forwarder = null;
   if (proxy) {
-    launchOptions.args.push(`--proxy-server=${proxy.server}`);
+    let server = proxy.server;
+    // Authenticated http proxy: route Chromium through the local forwarder so
+    // credentials go on every CONNECT up front. Chromium's own flow (CONNECT
+    // bare → expect 407 → retry with creds) fails against gateways that
+    // don't answer an unauthenticated CONNECT with a clean 407.
+    if (proxy.username && proxy.server.startsWith('http:')) {
+      try {
+        forwarder = await startProxyForwarder(proxy);
+        server = forwarder.url;
+      } catch (err) {
+        console.warn(`Proxy forwarder failed to start (${err.message}) — falling back to browser auth challenge`);
+      }
+    }
+    launchOptions.args.push(`--proxy-server=${server}`);
     // Log host only — never the credentials
-    console.log(`Scrape proxy enabled: ${proxy.server}${proxy.username ? ' (authenticated)' : ''}`);
+    console.log(`Scrape proxy enabled: ${proxy.server}${proxy.username ? (forwarder ? ' (credentials injected via local forwarder)' : ' (authenticated)') : ''}`);
   }
 
   if (process.env.NODE_ENV === 'production') {
@@ -101,7 +125,16 @@ async function launchBrowser() {
     }
   }
 
-  return puppeteer.launch(launchOptions);
+  let browser;
+  try {
+    browser = await puppeteer.launch(launchOptions);
+  } catch (err) {
+    if (forwarder) await forwarder.close();
+    throw err;
+  }
+  // The forwarder lives exactly as long as the browser that uses it
+  if (forwarder) browser.once('disconnected', () => { forwarder.close(); });
+  return browser;
 }
 
 // Third-party analytics/ads on FA pages burn paid proxy bandwidth without

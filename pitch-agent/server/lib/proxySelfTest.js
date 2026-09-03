@@ -94,6 +94,33 @@ const FA_TARGET = {
   },
 };
 
+// What a browser does first: CONNECT with no credentials. For Chromium's
+// challenge-based auth to work the gateway must answer 407 with a
+// Proxy-Authenticate header; anything else and the browser gives up with
+// ERR_TUNNEL_CONNECTION_FAILED even though credentials-up-front clients work.
+function authChallenge(proxy, timeoutMs = 10000) {
+  return new Promise((resolve) => {
+    const u = new URL(proxy.server);
+    const req = http.request({ host: u.hostname, port: u.port || 80, method: 'CONNECT', path: 'api.ipify.org:443', timeout: timeoutMs });
+    req.on('connect', (res, socket) => {
+      socket.destroy();
+      const proxyAuthenticate = res.headers['proxy-authenticate'] || null;
+      resolve({ ok: res.statusCode === 407 && !!proxyAuthenticate, statusCode: res.statusCode, proxyAuthenticate });
+    });
+    req.on('timeout', () => { req.destroy(new Error('CONNECT timed out')); });
+    req.on('error', (err) => resolve({ ok: false, error: err.message }));
+    req.end();
+  });
+}
+
+function describeChallenge(challenge) {
+  if (!challenge || challenge.ok) return null;
+  const got = challenge.statusCode
+    ? `HTTP ${challenge.statusCode}${challenge.statusCode === 407 && !challenge.proxyAuthenticate ? ' with no Proxy-Authenticate header' : ''}`
+    : challenge.error;
+  return `An unauthenticated CONNECT gets ${got} instead of a 407 challenge, so a browser authenticating on challenge cannot connect even though credentials-up-front clients can. The scraper sends credentials up front via its local forwarder, so this should not affect it.`;
+}
+
 async function repeated(proxy, target) {
   const attempts = await Promise.all(Array.from({ length: ATTEMPTS }, () => throughProxy(proxy, target)));
   const successes = attempts.filter((a) => a.ok).length;
@@ -141,21 +168,24 @@ function proxyTargeting(password) {
 async function proxySelfTest(parseProxy) {
   const proxy = parseProxy();
   const notConfigured = { ok: false, successes: 0, attempts: 0, results: [{ ok: false, error: 'SCRAPE_PROXY not configured' }] };
-  const [direct, tunneled, fa] = await Promise.all([
+  const [direct, tunneled, fa, challenge] = await Promise.all([
     directEgressIp(),
     proxy ? repeated(proxy, IPIFY_TARGET) : Promise.resolve(notConfigured),
     proxy ? repeated(proxy, FA_TARGET) : Promise.resolve(notConfigured),
+    proxy && proxy.username ? authChallenge(proxy) : Promise.resolve(null),
   ]);
+  const notes = [proxy ? interpret(tunneled, fa) : 'SCRAPE_PROXY is not configured — the scraper will hit FA directly and be blocked.', describeChallenge(challenge)].filter(Boolean);
   return {
     ranAt: new Date().toISOString(),
     serverEgressIp: direct,           // give this IP to the proxy provider
     proxyConfigured: !!proxy,
     proxyServer: proxy ? proxy.server : null,
     proxyTargeting: proxy ? proxyTargeting(proxy.password) : null, // e.g. "country-gb" — never the secret
-    connectionThroughProxy: tunneled, // successes/attempts to a neutral host
-    faThroughProxy: fa,               // successes/attempts to FA Full-Time
-    interpretation: proxy ? interpret(tunneled, fa) : 'SCRAPE_PROXY is not configured — the scraper will hit FA directly and be blocked.',
+    connectionThroughProxy: tunneled, // successes/attempts to a neutral host, credentials sent up front
+    faThroughProxy: fa,               // successes/attempts to FA Full-Time, credentials sent up front
+    browserStyleChallenge: challenge, // what the gateway answers a bare CONNECT (ok = proper 407 challenge)
+    interpretation: notes.join(' '),
   };
 }
 
-module.exports = { proxySelfTest, interpret, describeConnect, proxyTargeting };
+module.exports = { proxySelfTest, interpret, describeConnect, describeChallenge, proxyTargeting };

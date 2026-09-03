@@ -143,6 +143,14 @@ test('proxy self-test reads the gateway status code correctly', () => {
   assert.match(interpret(run([gw504, gw504]), run([gw504, gw504])), /cannot tunnel.*at all \(0\/4\)/);
 });
 
+test('proxy self-test explains a gateway that does not issue a 407 challenge', () => {
+  const { describeChallenge } = require('../lib/proxySelfTest');
+  assert.equal(describeChallenge({ ok: true, statusCode: 407, proxyAuthenticate: 'Basic realm="x"' }), null);
+  assert.match(describeChallenge({ ok: false, statusCode: 504, proxyAuthenticate: null }), /HTTP 504 instead of a 407 challenge/);
+  assert.match(describeChallenge({ ok: false, statusCode: 407, proxyAuthenticate: null }), /no Proxy-Authenticate header/);
+  assert.match(describeChallenge({ ok: false, error: 'CONNECT timed out' }), /CONNECT timed out instead of a 407/);
+});
+
 test('proxy self-test exposes targeting suffixes but never the password secret', () => {
   const { proxyTargeting } = require('../lib/proxySelfTest');
   assert.equal(proxyTargeting('s3cret_country-gb_city-norwich'), 'country-gb, city-norwich');
