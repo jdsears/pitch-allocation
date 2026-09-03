@@ -142,3 +142,12 @@ test('proxy self-test reads the gateway status code correctly', () => {
   assert.match(interpret(run([ok, ok]), run([gw403, gw403])), /never to fulltime\.thefa\.com.*by policy/);
   assert.match(interpret(run([gw504, gw504]), run([gw504, gw504])), /cannot tunnel.*at all \(0\/4\)/);
 });
+
+test('proxy self-test exposes targeting suffixes but never the password secret', () => {
+  const { proxyTargeting } = require('../lib/proxySelfTest');
+  assert.equal(proxyTargeting('s3cret_country-gb_city-norwich'), 'country-gb, city-norwich');
+  assert.equal(proxyTargeting('s3cret_country-gb'), 'country-gb');
+  assert.equal(proxyTargeting('s3cret'), '(none)');
+  assert.equal(proxyTargeting(''), null);
+  assert.ok(!proxyTargeting('s3cret_country-gb').includes('s3cret'));
+});
