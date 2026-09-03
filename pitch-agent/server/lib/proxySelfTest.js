@@ -129,6 +129,15 @@ function interpret(tunnel, fa) {
   return `This server cannot tunnel through the proxy at all (0/${tunnel.attempts + fa.attempts}): ${describeConnect([...tunnel.results, ...fa.results])}.`;
 }
 
+// IPRoyal carries geo/session targeting as underscore-separated suffixes on
+// the password (e.g. secret_country-gb_city-norwich). Surface just those
+// suffixes so the live targeting can be verified without exposing the secret.
+function proxyTargeting(password) {
+  if (!password) return null;
+  const parts = String(password).split('_').slice(1).filter(Boolean);
+  return parts.length ? parts.join(', ') : '(none)';
+}
+
 async function proxySelfTest(parseProxy) {
   const proxy = parseProxy();
   const notConfigured = { ok: false, successes: 0, attempts: 0, results: [{ ok: false, error: 'SCRAPE_PROXY not configured' }] };
@@ -142,10 +151,11 @@ async function proxySelfTest(parseProxy) {
     serverEgressIp: direct,           // give this IP to the proxy provider
     proxyConfigured: !!proxy,
     proxyServer: proxy ? proxy.server : null,
+    proxyTargeting: proxy ? proxyTargeting(proxy.password) : null, // e.g. "country-gb" — never the secret
     connectionThroughProxy: tunneled, // successes/attempts to a neutral host
     faThroughProxy: fa,               // successes/attempts to FA Full-Time
     interpretation: proxy ? interpret(tunneled, fa) : 'SCRAPE_PROXY is not configured — the scraper will hit FA directly and be blocked.',
   };
 }
 
-module.exports = { proxySelfTest, interpret, describeConnect };
+module.exports = { proxySelfTest, interpret, describeConnect, proxyTargeting };
