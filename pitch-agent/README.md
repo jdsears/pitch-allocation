@@ -85,9 +85,14 @@ SCRAPE_PROXY=http://user:password@proxy-host:port
 ```
 
 - Scheme optional (`host:port` assumes `http`); `socks5://…` also works.
-- Credentials are applied to the browser via authentication, never placed
-  in the Chromium `--proxy-server` flag, so they don't leak into process
-  listings.
+- Credentials are never placed in the Chromium `--proxy-server` flag (so
+  they don't leak into process listings). The app runs a small local
+  forwarder on 127.0.0.1 that attaches them to every CONNECT up front —
+  Chromium's own "connect bare, wait for a 407, retry" flow fails against
+  gateways that don't answer an unauthenticated CONNECT with a clean 407.
+- Diagnostic: `GET /api/fixtures/proxy-test` reports the server's egress IP,
+  the live targeting suffix, tunnel success rates to a neutral host and to
+  FA, and what the gateway answers a browser-style bare CONNECT.
 - Use a UK **residential/mobile** proxy. A data-centre proxy will likely be
   blocked just like Railway itself.
 

@@ -129,8 +129,14 @@ app.use('/api', generalRoutes);
 
 // Serve React build in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
+  // Hashed JS/CSS bundles can be cached hard; index.html must always be
+  // revalidated or browsers keep serving a stale UI after a deploy.
+  const noCacheIndex = (res, filePath) => {
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+  };
+  app.use(express.static(path.join(__dirname, '../client/build'), { setHeaders: noCacheIndex }));
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
   });
 }
