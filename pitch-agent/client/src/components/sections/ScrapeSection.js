@@ -110,9 +110,12 @@ export default function ScrapeSection({ showToast }) {
                 problem, not FA blocking). Check, in order: ① the proxy account's traffic
                 balance hasn't run out, ② credentials in SCRAPE_PROXY still match the provider
                 dashboard, ③ if the proxy username/password targets a specific city, remove the
-                city part (small city pools can be empty) and keep just the country. The daily
-                06:00 run retries 3× automatically; the downloadable script below works without
-                the proxy in the meantime.
+                city part (small city pools can be empty) and keep just the country. If all three
+                look fine, the provider's exit pool is probably just having a bad hour — the scraper
+                retries with backoff and the 06:00 run retries 3× on top. To see exactly what the
+                proxy is answering (useful for their support chat), open{' '}
+                <a href="/api/fixtures/proxy-test" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>the proxy diagnostic</a>.
+                The downloadable script below works without the proxy in the meantime.
               </p>
             ) : scrapeStatus?.lastError ? (
               <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>

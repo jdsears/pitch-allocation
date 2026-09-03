@@ -123,6 +123,16 @@ function isTransientNavError(message) {
   return TRANSIENT_NAV_ERROR.test(String(message || ''));
 }
 
+// Each CONNECT through a rotating residential proxy lands on a different
+// exit. When the provider's pool is having a bad hour most exits fail
+// (gateway answers 502/504), so a few quick retries aren't enough — back
+// off and keep trying for a couple of minutes to find a working exit.
+const NAV_RETRY_ATTEMPTS = Number(process.env.SCRAPE_NAV_RETRIES) || 6;
+
+function navRetryDelayMs(attempt) {
+  return Math.min(5000 * 2 ** (attempt - 1), 60000);
+}
+
 // Fetch the fully-rendered HTML from a URL using Puppeteer
 async function fetchRenderedHTML(url) {
   let browser;
@@ -149,16 +159,17 @@ async function fetchRenderedHTML(url) {
     // Use 'load' event which waits for initial page + subresources,
     // then wait for any subsequent navigation to settle.
     // Rotating proxies intermittently fail the CONNECT tunnel — those
-    // errors surface in seconds, so retry them a couple of times rather
-    // than failing the whole scrape on one blip.
+    // errors surface in seconds, so retry them with backoff rather than
+    // failing the whole scrape on a run of bad exits.
     for (let attempt = 1; ; attempt++) {
       try {
         await page.goto(url, { waitUntil: 'load', timeout: 90000 });
         break;
       } catch (err) {
-        if (attempt < 3 && isTransientNavError(err.message)) {
-          console.warn(`Connection blip (attempt ${attempt}/3): ${err.message.slice(0, 80)} — retrying in 5s`);
-          await new Promise(r => setTimeout(r, 5000));
+        if (attempt < NAV_RETRY_ATTEMPTS && isTransientNavError(err.message)) {
+          const delay = navRetryDelayMs(attempt);
+          console.warn(`Connection blip (attempt ${attempt}/${NAV_RETRY_ATTEMPTS}): ${err.message.slice(0, 80)} — retrying in ${delay / 1000}s`);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
         throw err;
@@ -777,4 +788,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, scrapeVetsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError };
+module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, scrapeVetsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError, navRetryDelayMs };
