@@ -32,8 +32,11 @@ async function parseFixturesFromImage(imageBuffer, mimeType, gender = 'boys') {
   const base64Image = imageBuffer.toString('base64');
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20250929',
+    model: 'claude-sonnet-5-5',
     max_tokens: 4096,
+    // Sonnet 5.5 thinks by default; this extraction ran without thinking on
+    // Sonnet 4.5, so keep it that way (between_tools = no up-front thinking).
+    thinking: { type: 'between_tools' },
     messages: [
       {
         role: 'user',
@@ -70,7 +73,12 @@ If you cannot find any fixtures, return an empty array [].`
   });
 
   // Extract JSON from the response
-  const text = response.content[0].text.trim();
+  // Join text blocks by type: a thinking block may precede the text.
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+    .trim();
 
   // Try to parse - handle cases where Claude wraps in markdown code blocks
   let jsonStr = text;
