@@ -136,6 +136,7 @@ function describeConnect(results) {
   const failures = results.filter((r) => !r.ok);
   if (!failures.length) return null;
   const codes = [...new Set(failures.map((r) => r.statusCode).filter(Boolean))];
+  if (codes.includes(402)) return 'the proxy account is out of traffic or its plan has lapsed (HTTP 402 Payment Required) — top up or renew it in the provider dashboard; the credentials themselves are accepted';
   if (codes.includes(407)) return 'the proxy rejected our credentials (HTTP 407) — check SCRAPE_PROXY matches the provider dashboard';
   if (codes.includes(403)) return 'the proxy refused the tunnel by policy (HTTP 403) — ask the provider whether this server IP or the destination host is blocked';
   if (codes.some((c) => c >= 500)) return `the proxy gateway accepted us but could not reach a working exit (HTTP ${codes.filter((c) => c >= 500).join('/')}) — a provider-side pool problem, usually intermittent; retries and time are the fix, and the provider can confirm a pool incident`;

@@ -166,6 +166,16 @@ function navRetryDelayMs(attempt) {
   return Math.min(5000 * 2 ** (attempt - 1), 60000);
 }
 
+// What a refused FA page means, in words the admin can act on.
+function describeRefusal(status, url) {
+  const proxied = !!parseProxy();
+  if (status === 403) {
+    return `FA Full-Time refused the page (HTTP 403)${proxied ? ' through the proxy' : ' — no SCRAPE_PROXY is set, and FA blocks cloud servers'}. Run the proxy self-test; if the proxy is healthy, FA's firewall is blocking this request. ${url}`;
+  }
+  if (status === 429) return `FA Full-Time is rate-limiting us (HTTP 429). Try again later. ${url}`;
+  return `FA Full-Time answered HTTP ${status}. ${url}`;
+}
+
 // Fetch the fully-rendered HTML from a URL using Puppeteer
 async function fetchRenderedHTML(url) {
   let browser;
@@ -194,9 +204,10 @@ async function fetchRenderedHTML(url) {
     // Rotating proxies intermittently fail the CONNECT tunnel — those
     // errors surface in seconds, so retry them with backoff rather than
     // failing the whole scrape on a run of bad exits.
+    let response = null;
     for (let attempt = 1; ; attempt++) {
       try {
-        await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+        response = await page.goto(url, { waitUntil: 'load', timeout: 90000 });
         break;
       } catch (err) {
         if (attempt < NAV_RETRY_ATTEMPTS && isTransientNavError(err.message)) {
@@ -209,6 +220,15 @@ async function fetchRenderedHTML(url) {
       }
     }
     console.log(`Page loaded. Current URL: ${page.url()}`);
+
+    // A refusal must fail the scrape. Without this check a 403 page (FA's
+    // firewall, or the proxy with an empty balance) sat through the table
+    // waits, parsed to 0 fixtures and was recorded as a successful run,
+    // so an outage looked like a quiet week.
+    const status = response ? response.status() : null;
+    if (status && status >= 400) {
+      throw new Error(describeRefusal(status, url));
+    }
 
     // Wait for any client-side redirect to complete
     try {
@@ -234,7 +254,10 @@ async function fetchRenderedHTML(url) {
     }
 
     if (!found) {
-      console.warn('No fixture table selector matched. Capturing page anyway for diagnostics.');
+      // No table at all is not "no fixtures": it is a block page, an error
+      // page or a layout change. Say so rather than saving nothing quietly.
+      const title = await page.title().catch(() => '');
+      throw new Error(`FA Full-Time page had no fixture table (title: "${title || 'none'}", final URL ${page.url()}). Check /api/fixtures/debug for what came back.`);
     }
 
     // Extra wait for JS to populate the table rows
@@ -821,4 +844,4 @@ async function getScrapeStatus() {
   return { ...scrapeState };
 }
 
-module.exports = { scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, scrapeVetsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError, navRetryDelayMs };
+module.exports = { describeRefusal, fetchRenderedHTML, scrapeAll, runScrape, getScrapeStatus, scrapeBoysFixtures, scrapeGirlsFixtures, scrapeVetsFixtures, saveFixtures, debugScrape, parseProxy, parseFixtures, isTransientNavError, navRetryDelayMs };
