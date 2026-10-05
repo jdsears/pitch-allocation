@@ -7,6 +7,8 @@
  * db/migrate.js. Add new tables/columns HERE and nowhere else.
  */
 
+const { computeFormat } = require('../lib/formats');
+
 async function ensureSchema(q) {
   // --- Tables ---
   await q.query(`CREATE TABLE IF NOT EXISTS venues (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW())`);
@@ -68,6 +70,17 @@ async function ensureSchema(q) {
      WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
      AND format = '11v11' AND min_age_group IS NULL`
   );
+
+  // A team format is an explicit exception; NULL means "follow the age
+  // default". Teams used to be created with the age default filled in, which
+  // went stale when the league moved formats and silently forced the old
+  // format onto new fixtures. Clear any that just restate today's default.
+  const teamFormats = await q.query(`SELECT id, age_group, gender, format FROM teams WHERE format IS NOT NULL AND age_group IS NOT NULL`);
+  for (const t of teamFormats.rows) {
+    if (t.format === computeFormat(t.age_group, t.gender)) {
+      await q.query(`UPDATE teams SET format = NULL WHERE id = $1`, [t.id]);
+    }
+  }
 
   // Vets play Sunday 14:30 on Morley's full-size 11v11 — add that slot
   // (idempotent; no-ops until the pitch exists)

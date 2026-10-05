@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 
-const { AGE_TO_FORMAT } = require('../lib/formats');
-const formatForAge = (age) => AGE_TO_FORMAT[age] || '11v11';
+const { computeFormat } = require('../lib/formats');
 const ageNumber = (age) => {
   const m = (age || '').match(/U(\d+)/i);
   return m ? parseInt(m[1], 10) : null;
@@ -20,7 +19,10 @@ router.get('/', async (req, res) => {
          ${onlyActive ? 'WHERE t.active = true' : ''}
          ORDER BY t.active DESC, t.gender, t.age_group NULLS LAST, t.name`
     );
-    res.json(result.rows);
+    res.json(result.rows.map(t => ({
+      ...t,
+      default_format: t.age_group ? computeFormat(t.age_group, t.gender) : null,
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -38,7 +40,7 @@ router.post('/', async (req, res) => {
       [
         name.trim(),
         age_group || null,
-        format || (age_group ? formatForAge(age_group) : null),
+        format || null,
         gender || 'boys',
         coaches || null,
         home_venue_id || null,
@@ -98,7 +100,7 @@ router.post('/sync-from-fixtures', async (req, res) => {
   try {
     // One row per distinct Morley home team that appears in fixtures
     const distinct = await pool.query(
-      `SELECT DISTINCT ON (home_team) home_team, gender, age_group, format
+      `SELECT DISTINCT ON (home_team) home_team, gender, age_group
          FROM fixtures
          WHERE is_home_game = true AND home_team ILIKE '%morley%'
          ORDER BY home_team, match_date DESC`
@@ -106,11 +108,11 @@ router.post('/sync-from-fixtures', async (req, res) => {
     let added = 0;
     for (const row of distinct.rows) {
       const result = await pool.query(
-        `INSERT INTO teams (name, age_group, format, gender)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO teams (name, age_group, gender)
+         VALUES ($1, $2, $3)
          ON CONFLICT (name) DO NOTHING
          RETURNING id`,
-        [row.home_team, row.age_group, row.format || formatForAge(row.age_group), row.gender || 'boys']
+        [row.home_team, row.age_group, row.gender || 'boys']
       );
       if (result.rows.length > 0) added++;
     }
@@ -121,6 +123,7 @@ router.post('/sync-from-fixtures', async (req, res) => {
 });
 
 // Build the rollover plan: every active team moves up one age group.
+// Format exceptions (e.g. "staying 5v5 another season") reset to auto.
 async function buildRolloverPlan() {
   const teams = await pool.query(
     `SELECT id, name, age_group, format, gender FROM teams WHERE active = true`
@@ -144,7 +147,7 @@ async function buildRolloverPlan() {
     // a different number like U18; leaves the name unchanged if it has no token.
     const newName = t.name.replace(new RegExp(`U${n}(?![0-9])`, 'gi'), newAge);
     return { id: t.id, name: t.name, from: t.age_group, change: 'promote',
-             new_name: newName, new_age: newAge, new_format: formatForAge(newAge), archive: false };
+             new_name: newName, new_age: newAge, new_format: null, archive: false };
   });
 }
 
