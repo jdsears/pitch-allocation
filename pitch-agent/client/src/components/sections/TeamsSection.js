@@ -241,7 +241,22 @@ export default function TeamsSection({ venues, showToast }) {
                   <tr key={t.id} style={{ opacity: t.active ? 1 : 0.5 }}>
                     <td>{t.name}</td>
                     <td>{t.age_group || '—'}</td>
-                    <td><span className="badge badge-blue">{t.format || '—'}</span></td>
+                    <td>
+                      {!t.format ? (
+                        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                          auto{t.default_format ? ` (${t.default_format})` : ''}
+                        </span>
+                      ) : t.default_format && t.format !== t.default_format ? (
+                        <span
+                          className="badge badge-amber"
+                          title={`Override: every fixture for this team is forced to ${t.format}. Age default is ${t.default_format}. Edit and pick "Format (auto)" to remove.`}
+                        >
+                          {t.format} override
+                        </span>
+                      ) : (
+                        <span className="badge badge-blue">{t.format}</span>
+                      )}
+                    </td>
                     <td>{t.gender}</td>
                     <td>{t.home_venue_name || '—'}</td>
                     <td>{t.default_camera || '—'}</td>

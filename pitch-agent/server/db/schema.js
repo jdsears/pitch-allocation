@@ -7,6 +7,8 @@
  * db/migrate.js. Add new tables/columns HERE and nowhere else.
  */
 
+const { computeFormat } = require('../lib/formats');
+
 async function ensureSchema(q) {
   // --- Tables ---
   await q.query(`CREATE TABLE IF NOT EXISTS venues (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, created_at TIMESTAMP DEFAULT NOW())`);
@@ -68,6 +70,50 @@ async function ensureSchema(q) {
      WHERE venue_id = (SELECT id FROM venues WHERE name = 'Morley' LIMIT 1)
      AND format = '11v11' AND min_age_group IS NULL`
   );
+
+  // A team format is an explicit exception; NULL means "follow the age
+  // default". Teams used to be created with the age default filled in, which
+  // went stale when the league moved formats and silently forced the old
+  // format onto new fixtures. Clear any that just restate today's default.
+  const teamFormats = await q.query(`SELECT id, age_group, gender, format FROM teams WHERE format IS NOT NULL AND age_group IS NOT NULL`);
+  for (const t of teamFormats.rows) {
+    if (t.format === computeFormat(t.age_group, t.gender)) {
+      await q.query(`UPDATE teams SET format = NULL WHERE id = $1`, [t.id]);
+    }
+  }
+
+  // One-off (2026/27): a team format matching LAST season's age rule but not
+  // this season's is a leftover from before formats moved up a year, not a
+  // choice (e.g. a U9 side stuck on 7v7). Reset it to auto and correct the
+  // team's upcoming fixtures. Recorded so a later deliberate override survives.
+  await q.query(`CREATE TABLE IF NOT EXISTS data_fixes (name VARCHAR(100) PRIMARY KEY, applied_at TIMESTAMP DEFAULT NOW())`);
+  const FIX = 'clear-stale-2025-26-team-formats';
+  const done = await q.query(`SELECT 1 FROM data_fixes WHERE name = $1`, [FIX]);
+  if (done.rows.length === 0) {
+    const LAST_SEASON = {
+      U5: '3v3', U6: '3v3', U7: '3v3', U8: '5v5', U9: '7v7', U10: '7v7',
+      U11: '9v9', U12: '9v9', U13: '11v11', U14: '11v11', U15: '11v11',
+      U16: '11v11', U17: '11v11', U18: '11v11',
+    };
+    const LAST_SEASON_GIRLS = { ...LAST_SEASON, U9: '5v5', U11: '7v7', U13: '9v9', U14: '9v9' };
+    const stale = await q.query(`SELECT id, name, age_group, gender, format FROM teams WHERE format IS NOT NULL AND age_group IS NOT NULL`);
+    for (const t of stale.rows) {
+      const lastSeason = (t.gender === 'girls' ? LAST_SEASON_GIRLS : LAST_SEASON)[t.age_group];
+      if (t.format !== lastSeason || t.format === computeFormat(t.age_group, t.gender)) continue;
+      await q.query(`UPDATE teams SET format = NULL WHERE id = $1`, [t.id]);
+      const upcoming = await q.query(
+        `SELECT id, age_group, gender FROM fixtures
+         WHERE LOWER(TRIM(home_team)) = LOWER(TRIM($1)) AND match_date >= CURRENT_DATE
+         AND format_override IS NOT TRUE`,
+        [t.name]
+      );
+      for (const f of upcoming.rows) {
+        await q.query(`UPDATE fixtures SET format = $1 WHERE id = $2`, [computeFormat(f.age_group || t.age_group, f.gender || t.gender), f.id]);
+      }
+      console.log(`Cleared stale ${t.format} format on ${t.name} (${t.gender} ${t.age_group}); corrected ${upcoming.rows.length} upcoming fixture(s)`);
+    }
+    await q.query(`INSERT INTO data_fixes (name) VALUES ($1) ON CONFLICT DO NOTHING`, [FIX]);
+  }
 
   // Vets play Sunday 14:30 on Morley's full-size 11v11 — add that slot
   // (idempotent; no-ops until the pitch exists)
