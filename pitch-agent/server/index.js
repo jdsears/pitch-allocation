@@ -12,6 +12,7 @@ const allocationRoutes = require('./routes/allocations');
 const refereeRoutes = require('./routes/referees');
 const generalRoutes = require('./routes/general');
 const teamRoutes = require('./routes/teams');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -125,6 +126,7 @@ app.use('/api/fixtures', requireAdminForMutations, fixtureRoutes);
 app.use('/api/allocations', requireAdminForMutations, allocationRoutes);
 app.use('/api/referees', refereeRoutes);
 app.use('/api/teams', requireAdminForMutations, teamRoutes);
+app.use('/api/settings', requireAdminForMutations, settingsRoutes);
 app.use('/api', generalRoutes);
 
 // Serve React build in production

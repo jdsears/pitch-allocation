@@ -24,6 +24,8 @@ async function ensureSchema(q) {
   await q.query(`CREATE TABLE IF NOT EXISTS allocation_history (id SERIAL PRIMARY KEY, team_name VARCHAR(150), pitch_id INTEGER REFERENCES pitches(id), kick_off TIME, match_date DATE, created_at TIMESTAMP DEFAULT NOW())`);
   // Persisted scrape run log (status survives restarts/redeploys)
   await q.query(`CREATE TABLE IF NOT EXISTS scrape_runs (id SERIAL PRIMARY KEY, source VARCHAR(20), started_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, total INTEGER, saved INTEGER, rescheduled INTEGER, error TEXT)`);
+  // Admin switches that must survive redeploys (e.g. the Shropham closure plan)
+  await q.query(`CREATE TABLE IF NOT EXISTS app_settings (key VARCHAR(100) PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMP DEFAULT NOW())`);
 
   // --- Columns added after launch ---
   await q.query(`ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS format_override BOOLEAN DEFAULT false`);
