@@ -1,6 +1,11 @@
 const axios = require('axios');
 const { format } = require('date-fns');
 const { getWeekSummary, getAllocationGrid, getMultiWeekOverview } = require('./allocator');
+const { isJunior11, HOST_VENUE } = require('../lib/shrophamClosure');
+
+// U14 on Morley's full-size 11v11 (Shropham closure) need the junior goals put up
+const goalsNote = (venue, pitchFormat, ageGroup) =>
+  venue === HOST_VENUE && pitchFormat === '11v11' && isJunior11(ageGroup) ? ' | 🥅 junior goals' : '';
 
 /**
  * Safely parse a YYYY-MM-DD date string into a local Date object.
@@ -94,7 +99,7 @@ function formatWeeklySummary(summary, gridUrl, gridData) {
             const refIcon = match.referee ? '🟢' : '🔴';
             const ref = match.referee || 'REF NEEDED';
             msg += `⏱ ${ko} | ${match.home_team} v ${match.away_team}\n`;
-            msg += `     ${match.age_group} | ${refIcon} ${ref}\n`;
+            msg += `     ${match.age_group}${goalsNote(venue, match.pitch_format, match.age_group)} | ${refIcon} ${ref}\n`;
           }
         }
       }
@@ -212,7 +217,8 @@ function formatOverviewMessage(overviewData, baseUrl) {
       const refIcon = a.referee ? '🟢' : '🔴';
       const ref = a.referee || 'REF NEEDED';
       msg += `⏱ ${ko} | ${a.home_team} v ${a.away_team}\n`;
-      msg += `     📍 ${a.venue_name} ${a.pitch_name} | ${a.age_group} | ${refIcon} ${ref}\n`;
+      const where = a.venue_name ? `${a.venue_name} ${a.pitch_name}` : 'Pitch not yet allocated';
+      msg += `     📍 ${where} | ${a.age_group}${goalsNote(a.venue_name, a.pitch_format, a.age_group)} | ${refIcon} ${ref}\n`;
     }
   }
 

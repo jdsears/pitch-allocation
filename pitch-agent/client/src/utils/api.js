@@ -57,6 +57,11 @@ export const getAvailableRefs = (date) => api.get('/referees/available', { param
 // Venues
 export const getVenues = () => api.get('/venues');
 
+// Shropham closure (Morley-only plan)
+export const getClosure = () => api.get('/settings/shropham-closure');
+export const saveClosure = (data) => api.put('/settings/shropham-closure', data);
+export const previewClosure = (data) => api.post('/settings/shropham-closure/preview', data);
+
 // Requests
 export const getRequests = (status) => api.get('/requests', { params: { status } });
 export const submitRequest = (data) => api.post('/requests', data);

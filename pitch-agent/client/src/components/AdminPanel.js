@@ -11,6 +11,7 @@ import {
 } from '../utils/api';
 import TeamsSection from './sections/TeamsSection';
 import ScrapeSection from './sections/ScrapeSection';
+import ClosureSection from './sections/ClosureSection';
 
 const selectStyle = {
   fontSize: 13,
@@ -500,6 +501,7 @@ export default function AdminPanel() {
       )}
 
       {/* Venues */}
+      {activeSection === 'venues' && <ClosureSection showToast={showToast} />}
       {activeSection === 'venues' && (
         <div className="card">
           <div className="card-header">
@@ -516,7 +518,12 @@ export default function AdminPanel() {
                   padding: '8px 0',
                   borderBottom: '1px solid var(--border)',
                 }}>
-                  <span style={{ fontSize: 14 }}>{p.name}</span>
+                  <span style={{ fontSize: 14 }}>
+                    {p.name}
+                    {p.closure_only && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}> — used only during the Shropham closure</span>
+                    )}
+                  </span>
                   <span className="badge badge-blue">{p.format}</span>
                 </div>
               ))}

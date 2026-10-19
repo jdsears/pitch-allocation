@@ -12,12 +12,22 @@ import {
   deleteFixture,
   getReferees,
   getVenues,
+  getClosure,
   claimMatch,
   unclaimMatch,
 } from '../utils/api';
 import { cleanTeamName, formatMatchDay, parseDate } from '../utils/helpers';
 import ConfirmModal from './ConfirmModal';
 import { KICKOFF_TIMES } from '../utils/constants';
+
+const isJunior11 = (age) => {
+  const m = /U(\d+)/i.exec(age || '');
+  return !!m && Number(m[1]) <= 14;
+};
+const formatIsoDay = (iso) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? format(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), 'EEE d MMM') : iso;
+};
 
 export default function AllocationGrid({ isAdmin = false }) {
   const [weekDate, setWeekDate] = useState(
@@ -38,6 +48,7 @@ export default function AllocationGrid({ isAdmin = false }) {
   const [confirmAction, setConfirmAction] = useState(null);
   const [editingFixtureId, setEditingFixtureId] = useState(null);
   const [editFixtureData, setEditFixtureData] = useState({});
+  const [closure, setClosure] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -63,6 +74,12 @@ export default function AllocationGrid({ isAdmin = false }) {
           (v.pitches || []).map(p => ({ id: p.id, label: `${v.name} — ${p.name} (${p.format})` }))
         )
       );
+      try {
+        const closureRes = await getClosure();
+        setClosure(closureRes.data);
+      } catch (closureErr) {
+        setClosure(null);
+      }
       // Fetch fixtures separately so a failure doesn't blank the whole page
       try {
         const fixturesRes = await getFixtures({ dateFrom: weekDate, dateTo: weekEndDate, homeOnly: 'true' });
@@ -89,7 +106,8 @@ export default function AllocationGrid({ isAdmin = false }) {
       const res = await generateAllocations(weekDate);
       const c = res.data.conflicts || [];
       setConflicts(c);
-      showToast(`Allocated ${res.data.allocated} fixtures${c.length ? `. ${c.length} conflicts.` : ''}`);
+      const moved = res.data.moved ? ` (${res.data.moved} moved into the Morley-only plan — re-publish)` : '';
+      showToast(`Allocated ${res.data.allocated} fixtures${moved}${c.length ? `. ${c.length} conflicts.` : ''}`);
       loadGrid();
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Unknown error';
@@ -267,6 +285,9 @@ export default function AllocationGrid({ isAdmin = false }) {
     }
   }
 
+  const closureThisWeek = closure?.enabled && closure.from && closure.from <= weekEnd
+    && (!closure.to || closure.to >= weekDate);
+
   return (
     <div>
       {/* Week navigation */}
@@ -285,6 +306,14 @@ export default function AllocationGrid({ isAdmin = false }) {
           This Week
         </button>
       </div>
+
+      {closureThisWeek && (
+        <div className="card" style={{ border: '1px solid var(--amber)', padding: '12px 16px', fontSize: 13 }}>
+          🚧 <strong>Shropham closed{closure.from > weekDate ? ` from ${formatIsoDay(closure.from)}` : ''}{closure.to && closure.to < weekEnd ? ` until ${formatIsoDay(closure.to)}` : ''}</strong>
+          {' — '}all home games at Morley. Kick-offs: Sat {closure.saturday.join(' · ')}, Sun {closure.sunday.join(' · ')}.
+          {isAdmin && ' Auto-Allocate moves any games still at Shropham; re-publish afterwards.'}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="stats">
@@ -551,6 +580,11 @@ export default function AllocationGrid({ isAdmin = false }) {
                                     <span className="badge badge-blue">{a.age_group}</span>
                                     {a.gender === 'girls' && (
                                       <span className="badge badge-amber" style={{ marginLeft: 4 }}>G</span>
+                                    )}
+                                    {venue === 'Morley' && a.pitch_format === '11v11' && isJunior11(a.age_group) && (
+                                      <span className="badge badge-amber" style={{ marginLeft: 4 }} title="U14 use the junior (21x7ft) goals on Morley's 11v11">
+                                        🥅 Junior goals
+                                      </span>
                                     )}
                                     {a.format && a.pitch_format && a.format !== a.pitch_format && (
                                       <span
