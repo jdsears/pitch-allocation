@@ -8,6 +8,7 @@
  */
 
 const { computeFormat } = require('../lib/formats');
+const { retireOldClosurePitches } = require('../lib/shrophamClosure');
 
 async function ensureSchema(q) {
   // --- Tables ---
@@ -154,6 +155,8 @@ async function ensureSchema(q) {
       }
     }
   }
+
+  await retireOldClosurePitches(q);
 }
 
 module.exports = { ensureSchema };

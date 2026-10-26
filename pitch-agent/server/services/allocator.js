@@ -5,8 +5,8 @@ const { format, startOfWeek, addDays } = require('date-fns');
 // trust stale/incorrect format values stored in the fixtures table.
 const { computeFormat } = require('../lib/formats');
 const {
-  loadClosure, isClosedOn, isHostPitch, overlayFor, partnerIds, closureSlots,
-  ensureOverlayPitches, isJunior11, CLOSED_VENUE, OVERLAY_PITCHES,
+  loadClosure, isClosedOn, isHostPitch, isClosurePitch, closureSlots,
+  ensureClosurePitches, isJunior11, CLOSED_VENUE,
 } = require('../lib/shrophamClosure');
 
 /**
@@ -125,7 +125,7 @@ async function allocateFixtures(weekStartDate, opts = {}) {
     const anyClosed = weekDates.some(closedOn);
     if (anyClosed) {
       console.log(`Shropham closed on ${weekDates.filter(closedOn).join(', ')} — Morley-only plan`);
-      await ensureOverlayPitches(client);
+      await ensureClosurePitches(client);
     }
 
     // Clear existing DRAFT allocations for this week so we can re-allocate
@@ -248,9 +248,9 @@ async function allocateFixtures(weekStartDate, opts = {}) {
     for (const [date, dateFixtures] of Object.entries(fixturesByDate)) {
       const dayOfWeek = getDayOfWeek(date);
       const closed = closedOn(date);
-      // Closure: Morley pitches only (incl. the extra 9v9 markings).
-      // Normal: every pitch except those closure-only 9v9 markings.
-      const datePitches = pitches.rows.filter(p => (closed ? isHostPitch(p) : !overlayFor(p)));
+      // Closure: Morley pitches only (incl. the closure-only 9v9).
+      // Normal: every pitch except the closure-only ones.
+      const datePitches = pitches.rows.filter(p => (closed ? isHostPitch(p) : !isClosurePitch(p)));
 
       // Track occupied slots per pitch for this date, and (closure) how many
       // games kick off at each time across Morley, to spread arrivals
@@ -305,9 +305,7 @@ async function allocateFixtures(weekStartDate, opts = {}) {
         if (list.length === 0) return list;
         const standard = await getSlotsForPitchDay(pitch.id, dayOfWeek);
         const daySlots = closed ? closureSlots(closure, pitch, dayOfWeek, standard) : standard;
-        // A 9v9 marked over another pitch shares its space: either one in use blocks the other
-        const space = [pitch.id, ...(closed ? partnerIds(pitch, dayOfWeek, datePitches) : [])];
-        const blocked = space.flatMap(id => occupiedSlots[id] || []);
+        const blocked = occupiedSlots[pitch.id] || [];
         let free = daySlots.filter(s => !blocked.includes(s));
         console.log(`  ${label}: ${pitch.venue_name} ${pitch.name} (id=${pitch.id}) — ${dayOfWeek} slots: ${daySlots.join(', ') || 'NONE'}, free: ${free.join(', ') || 'none'}, fixtures: ${list.length}`);
         if (free.length === 0) return list;
@@ -324,7 +322,7 @@ async function allocateFixtures(weekStartDate, opts = {}) {
         let placing = ordered.slice(0, free.length);
         const overflow = ordered.slice(free.length);
 
-        if (closed && pitch.format === '11v11' && !overlayFor(pitch)) {
+        if (closed && pitch.format === '11v11') {
           // Group U14 (junior goals) at one end of the day so the goals
           // only get swapped once; rotation still decides who gets a slot
           const juniors = placing.filter(f => isJunior11(f.age_group));
@@ -468,11 +466,9 @@ async function allocateFixtures(weekStartDate, opts = {}) {
         }
 
         // Anything left is a conflict
-        const shared = closed && OVERLAY_PITCHES.find(o => o.day === dayOfWeek && (o.format === reqFormat || o.over === reqFormat));
-        const sharedNote = shared ? ` (the ${shared.format} is marked over the ${shared.over}, so they share kick-offs)` : '';
         remaining.forEach(f => conflicts.push({
           fixture: f,
-          reason: conflictReason(f, `All ${reqFormat} slots full on ${dayOfWeek} ${date}${sharedNote}`),
+          reason: conflictReason(f, `All ${reqFormat} slots full on ${dayOfWeek} ${date}`),
         }));
       }
     }
