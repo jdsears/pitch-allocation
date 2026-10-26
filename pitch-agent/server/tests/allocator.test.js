@@ -8,7 +8,7 @@
  *  - preference never starves a fixture with no alternative venue
  *  - team format exceptions
  *  - kick-off rotation
- *  - Shropham closure: Morley-only plan, 9v9 markings, junior goals grouping,
+ *  - Shropham closure: Morley-only plan, closure 9v9 pitch, junior goals grouping,
  *    moving games off Shropham
  */
 const test = require('node:test');
@@ -22,9 +22,8 @@ const PITCHES = [
   { id: 20, venue_id: VENUE_SHROPHAM, name: '11v11', format: '11v11', min_age_group: null, max_age_group: 'U14', venue_name: 'Shropham' },
   { id: 30, venue_id: VENUE_MORLEY, name: '7v7 (Main)', format: '7v7', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
   { id: 40, venue_id: VENUE_MORLEY, name: '3v3', format: '3v3', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
-  // Closure-only 9v9 markings: no standard slots, never used outside closure
-  { id: 50, venue_id: VENUE_MORLEY, name: '9v9 over 11v11', format: '9v9', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
-  { id: 60, venue_id: VENUE_MORLEY, name: '9v9 over 7v7', format: '9v9', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
+  // Closure-only 9v9: no standard slots, never used outside the closure
+  { id: 50, venue_id: VENUE_MORLEY, name: '9v9', format: '9v9', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
 ];
 const SLOTS = {
   10: ['10:00:00', '12:30:00'],
@@ -258,38 +257,38 @@ test('closure: games spread across kick-offs to ease parking', async () => {
     'one game per kick-off rather than all three at 09:30');
 });
 
-test('closure: Saturday 9v9 is marked over the 11v11 and shares its slots', async () => {
+test('closure: Saturday 9v9 uses the closure 9v9 pitch at the plan kick-offs', async () => {
   reset({
     closure: CLOSURE,
     fixtures: [
-      fix(1, 'Morley YFC U16 Hawks', 'U16', '11v11'),
-      fix(2, 'Morley YFC U12 Owls', 'U12', '9v9'),
-      fix(3, 'Morley YFC U13 Kites', 'U13', '9v9'),
-      fix(4, 'Morley YFC U12 Wrens', 'U12', '9v9'),
-    ],
-  });
-  const res = await allocateFixtures(WEEK);
-  assert.equal(res.allocated, 3, 'three Saturday slots between the 11v11 and its 9v9 marking');
-  assert.equal(res.conflicts.length, 1);
-  const nineV9 = state.inserted.filter(i => i.fixture_id !== 1);
-  assert.ok(nineV9.every(i => i.pitch_id === 50), 'Saturday 9v9 uses the marking over the 11v11');
-  const kos = state.inserted.map(i => i.kick_off);
-  assert.equal(new Set(kos).size, kos.length, 'never an 11v11 and its 9v9 marking at the same time');
-});
-
-test('closure: Sunday 9v9 is marked over the 7v7 and runs alongside the 11v11', async () => {
-  reset({
-    closure: CLOSURE,
-    fixtures: [
-      fix(1, 'Morley YFC U12 Owls', 'U12', '9v9', SUN),
-      fix(2, 'Morley YFC U10 Reds', 'U10', '7v7', SUN),
-      fix(3, 'Morley YFC U16 Hawks', 'U16', '11v11', SUN),
+      fix(1, 'Morley U12 Girls', 'U12', '9v9', { gender: 'girls' }),
+      fix(2, 'Morley U13 Girls', 'U13', '9v9', { gender: 'girls' }),
+      fix(3, 'Morley YFC U12 Wrens', 'U12', '9v9'),
     ],
   });
   const res = await allocateFixtures(WEEK);
   assert.equal(res.allocated, 3);
-  assert.equal(pitchOf(1), 60, 'Sunday 9v9 uses the marking over the 7v7');
-  assert.notEqual(koOf(1), koOf(2), '9v9 and the 7v7 it is marked over never clash');
+  assert.ok(state.inserted.every(i => i.pitch_id === 50), 'all on Morley 9v9');
+  assert.deepEqual(state.inserted.map(i => i.kick_off).sort(), ['09:30:00', '11:00:00', '12:30:00']);
+});
+
+test('closure: Sunday 9v9 runs alongside the 7v7 and 11v11', async () => {
+  reset({
+    closure: CLOSURE,
+    fixtures: [
+      fix(1, 'Morley YFC U12 Owls', 'U12', '9v9', SUN),
+      fix(2, 'Morley YFC U13 Kites', 'U13', '9v9', SUN),
+      fix(3, 'Morley YFC U10 Reds', 'U10', '7v7', SUN),
+      fix(4, 'Morley YFC U11 Stallions', 'U11', '7v7', SUN),
+      fix(5, 'Morley YFC U16 Hawks', 'U16', '11v11', SUN),
+    ],
+  });
+  const res = await allocateFixtures(WEEK);
+  assert.equal(res.allocated, 5, 'nothing left over: the 9v9 has its own space');
+  assert.equal(res.conflicts.length, 0);
+  assert.equal(pitchOf(1), 50);
+  assert.equal(pitchOf(2), 50);
+  assert.equal(pitchOf(3), 30);
 });
 
 test('closure: U14 junior-goal games grouped first (or last) on the 11v11', async () => {
