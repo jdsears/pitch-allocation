@@ -97,9 +97,9 @@ export default function ClosureSection({ showToast }) {
 
       <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 14 }}>
         From the start date, Auto-Allocate puts every home game at Morley: U14 play on the 11v11
-        with the junior goals (one 11v11 game at a time), 9v9 uses a pitch marked over the 11v11 on
-        Saturdays and over the 7v7 on Sundays, and games are spread across the kick-offs below to
-        ease parking. Normal rules return after the end date.
+        with the junior goals (one 11v11 game at a time), 9v9 uses an extra 9v9 pitch marked out at
+        Morley for the closure, and games are spread across the kick-offs below to ease parking.
+        Normal rules return after the end date.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>

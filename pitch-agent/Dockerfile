@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgbm1 \
     libasound2 \
     ca-certificates \
+    tini \
   && rm -rf /var/lib/apt/lists/*
 
 # Tell Puppeteer to use the system Chromium
@@ -49,4 +50,8 @@ COPY --from=builder /app/client/build ./client/build
 
 EXPOSE 3001
 
+# Node can't reap orphaned processes, and every Chromium launch leaves some
+# behind (crashpad etc.). As PID 1 they'd pile up as zombies until Chromium
+# can no longer start; tini reaps them (-s: also when it isn't PID 1).
+ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
 CMD ["node", "server/index.js"]

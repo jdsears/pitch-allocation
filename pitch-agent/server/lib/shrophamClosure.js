@@ -8,8 +8,8 @@
  *  - only Morley pitches are used, with the kick-off times below on Sat/Sun
  *  - pitch age limits are lifted: U14 play junior 11v11 on Morley's full-size
  *    pitch using the junior (21x7ft) goals; still one 11v11 game at a time
- *  - 9v9 uses a pitch marked out over another pitch (Sat: over the 11v11,
- *    Sun: over the 7v7), so it can't run at the same time as that pitch
+ *  - 9v9 uses an extra pitch marked out at Morley for the closure only
+ *    (its own space, so it runs alongside every other pitch)
  *  - games are spread across the kick-off times to ease parking
  *  - U14 games on the 11v11 are grouped first (or last) in the day so the
  *    junior goals only go up and come down once
@@ -32,10 +32,11 @@ const DEFAULTS = {
 // NCYFL 26/27 rules M.3 / M.4: earliest and latest kick-off per day
 const KO_WINDOWS = { saturday: ['09:30', '12:30'], sunday: ['09:30', '14:30'] };
 
-const OVERLAY_PITCHES = [
-  { name: '9v9 over 11v11', format: '9v9', day: 'Saturday', over: '11v11' },
-  { name: '9v9 over 7v7', format: '9v9', day: 'Sunday', over: '7v7' },
-];
+// Extra Morley pitches that exist only for the closure
+const CLOSURE_PITCHES = [{ name: '9v9', format: '9v9' }];
+// The first plan marked 9v9 over the 11v11 (Sat) and the 7v7 (Sun); replaced
+// by the single standalone 9v9 above
+const RETIRED_PITCHES = ['9v9 over 11v11', '9v9 over 7v7'];
 
 /** Junior 11v11 (U14 and under) uses the smaller 21x7ft goals. */
 function isJunior11(ageGroup) {
@@ -108,7 +109,7 @@ async function saveClosure(q, value) {
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
     [SETTING_KEY, JSON.stringify(next)]
   );
-  if (value.enabled) await ensureOverlayPitches(q);
+  if (value.enabled) await ensureClosurePitches(q);
   return next;
 }
 
@@ -117,58 +118,68 @@ function isClosedOn(closure, dateStr) {
   return dateStr >= closure.from && (!closure.to || dateStr <= closure.to);
 }
 
-/** Create the extra 9v9 pitches at Morley (idempotent). */
-async function ensureOverlayPitches(q) {
+/** Create the closure-only pitches at Morley (idempotent). Returns the host venue id. */
+async function ensureClosurePitches(q) {
   const host = await q.query(`SELECT id FROM venues WHERE name = $1 LIMIT 1`, [HOST_VENUE]);
-  if (host.rows.length === 0) return;
-  for (const o of OVERLAY_PITCHES) {
+  if (host.rows.length === 0) return null;
+  for (const c of CLOSURE_PITCHES) {
     await q.query(
       `INSERT INTO pitches (venue_id, name, format) VALUES ($1, $2, $3)
        ON CONFLICT (venue_id, name) DO NOTHING`,
-      [host.rows[0].id, o.name, o.format]
+      [host.rows[0].id, c.name, c.format]
     );
   }
+  return host.rows[0].id;
+}
+
+/**
+ * Replace the retired 9v9 markings with the standalone 9v9: games booked on
+ * them move across at the same kick-off (keeping refs), then they're removed.
+ * No-op once done.
+ */
+async function retireOldClosurePitches(q) {
+  const old = await q.query(
+    `SELECT p.id FROM pitches p JOIN venues v ON v.id = p.venue_id
+      WHERE v.name = $1 AND p.name = ANY($2::text[])`,
+    [HOST_VENUE, RETIRED_PITCHES]
+  );
+  if (old.rows.length === 0) return 0;
+  const hostId = await ensureClosurePitches(q);
+  const target = await q.query(
+    `SELECT id FROM pitches WHERE venue_id = $1 AND name = $2`,
+    [hostId, CLOSURE_PITCHES[0].name]
+  );
+  const newId = target.rows[0].id;
+  const oldIds = old.rows.map(r => r.id);
+  const moved = await q.query(`UPDATE allocations SET pitch_id = $1 WHERE pitch_id = ANY($2::int[])`, [newId, oldIds]);
+  await q.query(`UPDATE allocation_history SET pitch_id = $1 WHERE pitch_id = ANY($2::int[])`, [newId, oldIds]);
+  await q.query(`DELETE FROM time_slots WHERE pitch_id = ANY($1::int[])`, [oldIds]);
+  await q.query(`DELETE FROM pitches WHERE id = ANY($1::int[])`, [oldIds]);
+  console.log(`Replaced ${oldIds.length} marked-over 9v9 pitch(es) with Morley's standalone 9v9; moved ${moved.rowCount} allocation(s)`);
+  return moved.rowCount;
 }
 
 const isHostPitch = (pitch) => (pitch.venue_name || '').toLowerCase() === HOST_VENUE.toLowerCase();
 
-function overlayFor(pitch) {
-  if (!isHostPitch(pitch)) return null;
-  return OVERLAY_PITCHES.find(o => o.name === pitch.name) || null;
-}
-
-/**
- * Pitches whose space is shared with `pitch` on `day`: an overlay 9v9 and the
- * pitch it's marked over can't both be in use at once.
- */
-function partnerIds(pitch, day, pitches) {
-  if (!isHostPitch(pitch)) return [];
-  const own = overlayFor(pitch);
-  if (own) {
-    if (own.day !== day) return [];
-    return pitches.filter(p => isHostPitch(p) && !overlayFor(p) && p.format === own.over).map(p => p.id);
-  }
-  const names = OVERLAY_PITCHES.filter(o => o.day === day && o.over === pitch.format).map(o => o.name);
-  return pitches.filter(p => isHostPitch(p) && names.includes(p.name)).map(p => p.id);
-}
+/** Is this one of Morley's closure-only pitches (never used outside the closure)? */
+const isClosurePitch = (pitch) => isHostPitch(pitch) && CLOSURE_PITCHES.some(c => c.name === pitch.name);
 
 /**
  * Closure kick-offs for a Morley pitch on a day. `standardSlots` are the
  * pitch's normal slots for that day: a pitch only plays on days it normally
- * does. Overlay pitches play only on their own day. Weekdays keep the
+ * does, and closure-only pitches play every Sat/Sun. Weekdays keep the
  * standard slots.
  */
 function closureSlots(closure, pitch, day, standardSlots) {
   if (!isHostPitch(pitch)) return [];
   const planTimes = closure[day.toLowerCase()];
-  const overlay = overlayFor(pitch);
-  if (overlay) return overlay.day === day && Array.isArray(planTimes) ? planTimes.map(toTime) : [];
+  if (isClosurePitch(pitch)) return Array.isArray(planTimes) ? planTimes.map(toTime) : [];
   if (!Array.isArray(planTimes) || standardSlots.length === 0) return standardSlots;
   return planTimes.map(toTime);
 }
 
 module.exports = {
-  SETTING_KEY, CLOSED_VENUE, HOST_VENUE, DEFAULTS, KO_WINDOWS, OVERLAY_PITCHES,
-  isJunior11, toTime, validateClosure, loadClosure, saveClosure,
-  isClosedOn, ensureOverlayPitches, isHostPitch, overlayFor, partnerIds, closureSlots,
+  SETTING_KEY, CLOSED_VENUE, HOST_VENUE, DEFAULTS, KO_WINDOWS, CLOSURE_PITCHES,
+  isJunior11, toTime, validateClosure, loadClosure, saveClosure, isClosedOn,
+  ensureClosurePitches, retireOldClosurePitches, isHostPitch, isClosurePitch, closureSlots,
 };

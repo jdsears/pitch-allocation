@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node server/index.js"
+startCommand = "/usr/bin/tini -s -- node server/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 

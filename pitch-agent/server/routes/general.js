@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../db/pool');
 const { requireAdmin } = require('../middleware/auth');
 const { AGE_TO_FORMAT, GIRLS_AGE_TO_FORMAT } = require('../lib/formats');
-const { overlayFor } = require('../lib/shrophamClosure');
+const { isClosurePitch } = require('../lib/shrophamClosure');
 
 // --- VENUES & PITCHES ---
 
@@ -20,7 +20,7 @@ router.get('/venues', async (req, res) => {
       ...v,
       pitches: pitches.rows
         .filter(p => p.venue_id === v.id)
-        .map(p => ({ ...p, closure_only: !!overlayFor(p) })),
+        .map(p => ({ ...p, closure_only: isClosurePitch(p) })),
     }));
 
     res.json(result);
