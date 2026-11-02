@@ -74,6 +74,25 @@ async function applyProxyAuth(page) {
   }
 }
 
+// "N processes, M defunct" for the container, added to launch errors so a
+// build-up of leftover Chromium processes is visible from the scrape status
+function processSummary() {
+  try {
+    let total = 0;
+    let defunct = 0;
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue;
+      total++;
+      try {
+        if (/^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'))) defunct++;
+      } catch (e) { /* process exited while counting */ }
+    }
+    return `${total} processes in the container, ${defunct} defunct`;
+  } catch (e) {
+    return null; // no /proc (not Linux)
+  }
+}
+
 // Launch a Puppeteer browser with Railway-compatible settings
 async function launchBrowser() {
   const launchOptions = {
@@ -130,6 +149,8 @@ async function launchBrowser() {
     browser = await puppeteer.launch(launchOptions);
   } catch (err) {
     if (forwarder) await forwarder.close();
+    const summary = processSummary();
+    if (summary) err.message = `${err.message}\n(${summary})`;
     throw err;
   }
   // The forwarder lives exactly as long as the browser that uses it
