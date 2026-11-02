@@ -59,8 +59,8 @@ app.post('/api/setup', requireAdmin, async (req, res) => {
 
     const pitches = [
       { name: '3v3', format: '3v3', venue: morleyId },
-      { name: '5v5 (Main)', format: '5v5', venue: morleyId },
-      { name: '7v7 (Main)', format: '7v7', venue: morleyId },
+      { name: '5v5', format: '5v5', venue: morleyId },
+      { name: '7v7', format: '7v7', venue: morleyId },
       { name: '11v11', format: '11v11', venue: morleyId },
       { name: '9v9', format: '9v9', venue: shrophamId },
       { name: '11v11', format: '11v11', venue: shrophamId },

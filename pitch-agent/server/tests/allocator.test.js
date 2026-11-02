@@ -20,7 +20,7 @@ const VENUE_SHROPHAM = 2;
 const PITCHES = [
   { id: 10, venue_id: VENUE_MORLEY, name: '11v11', format: '11v11', min_age_group: 'U15', max_age_group: null, venue_name: 'Morley' },
   { id: 20, venue_id: VENUE_SHROPHAM, name: '11v11', format: '11v11', min_age_group: null, max_age_group: 'U14', venue_name: 'Shropham' },
-  { id: 30, venue_id: VENUE_MORLEY, name: '7v7 (Main)', format: '7v7', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
+  { id: 30, venue_id: VENUE_MORLEY, name: '7v7', format: '7v7', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
   { id: 40, venue_id: VENUE_MORLEY, name: '3v3', format: '3v3', min_age_group: null, max_age_group: null, venue_name: 'Morley' },
   // Closure-only 9v9: no standard slots, never used outside the closure
   { id: 50, venue_id: VENUE_MORLEY, name: '9v9', format: '9v9', min_age_group: null, max_age_group: null, venue_name: 'Morley' },

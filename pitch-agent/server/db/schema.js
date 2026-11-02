@@ -156,6 +156,17 @@ async function ensureSchema(q) {
     }
   }
 
+  // Morley has one pitch of each size; "(Main)" wrongly implied others
+  for (const [from, to] of [['5v5 (Main)', '5v5'], ['7v7 (Main)', '7v7']]) {
+    await q.query(
+      `UPDATE pitches p SET name = $2
+         FROM venues v
+        WHERE v.id = p.venue_id AND v.name = 'Morley' AND p.name = $1
+          AND NOT EXISTS (SELECT 1 FROM pitches o WHERE o.venue_id = p.venue_id AND o.name = $2)`,
+      [from, to]
+    );
+  }
+
   await retireOldClosurePitches(q);
 }
 
